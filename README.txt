@@ -1,1 +1,1 @@
-# Time to save TAMU football!
+Time to save TAMU football!
