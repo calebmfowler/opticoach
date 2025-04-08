@@ -19,8 +19,9 @@ class Preprocessor:
     '''
     
     def __init__(self, aggregator):
+        self.preprocessedFiles = {}
         self.__aggregatedFiles = aggregator.aggregatedFiles
+        return
 
     def preprocess(self):
-        self.preprocessedFiles = {}
         return
