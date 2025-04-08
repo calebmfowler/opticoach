@@ -20,6 +20,7 @@ class Postprocessor:
     '''
 
     def __init__(self, preprocessor, model):
+        self.postprocessedFiles = {}
         self.__preprocessedFiles = preprocessor.preprocessedFiles
         self.__predictedFiles = model.predictedFiles
 
