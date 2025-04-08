@@ -1,16 +1,15 @@
 class Aggregator:
     '''
-    # `class Aggregator`
-    This `class` aggregates raw data via web-scraping, OCR of sports statistics books, etc.
+    ### class Aggregator
+    This `class` aggregates data via web-scraping, OCR of sports statistics books, etc.
 
-    ## `dict aggregatedFiles`
+    ### dict aggregatedFiles
     This `dict` stores `string` keys of all aggregated files and `string` values of file names
 
-    ## `void aggregate()`
+    ### void aggregate()
     This `void` function aggregates all data, updating the files referenced by aggregatedFiles
     '''
 
-    aggregatedFiles = {}
-
-    def aggregate():
+    def aggregate(self):
+        self.aggregatedFiles = {}
         return
