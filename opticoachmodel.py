@@ -89,6 +89,7 @@ class OpticoachModel:
         '''
         Train the recurrent neural network.
         '''
+        
         featureScaler, labelScaler = MinMaxScaler(), MinMaxScaler()
         # TO-DO: fit_transform training data, transform validation data
 
