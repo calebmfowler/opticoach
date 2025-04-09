@@ -4,9 +4,6 @@ from keras.src.layers import Masking, GRU, Dense
 import numpy as np
 from sklearn.preprocessing import MinMaxScaler
 from utilities import save_pkl, load_pkl
-<<<<<<< HEAD
-=======
->>>>>>> 77f0501 (Drafted Model Architecture & revise sw arch)
 
 class OpticoachModel:
     '''
@@ -53,7 +50,6 @@ class OpticoachModel:
         https://chatgpt.com/share/67f4a398-42f8-8012-9c56-9538846a97b0
         '''
 
-=======
     def __build(self):
         '''
         Build the recurrent neural network.
@@ -62,7 +58,6 @@ class OpticoachModel:
         https://chatgpt.com/share/67f4a398-42f8-8012-9c56-9538846a97b0
         '''
 
->>>>>>> 77f0501 (Drafted Model Architecture & revise sw arch)
         # We first accept an input batch of coaches. For each coach, a time-ordered sequence of
         # coaching metrics will be provided. In order to accomodate gaps in the data, a
         # masking is used to cover missing time steps and missing metrics.
@@ -102,8 +97,6 @@ class OpticoachModel:
         model = Model(inputs=input, outputs=output)
         save_pkl(model, 'model.pkl')
         self.modelFiles['model'] = 'model.pkl'
-<<<<<<< HEAD
-
 
     def train(self):
         '''
