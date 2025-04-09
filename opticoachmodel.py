@@ -4,10 +4,6 @@ from keras.src.layers import Masking, GRU, Dense
 import numpy as np
 from sklearn.preprocessing import MinMaxScaler
 from utilities import save_pkl, load_pkl
-<<<<<<< HEAD
-
-=======
->>>>>>> 77f0501 (Drafted Model Architecture & revise sw arch)
 
 class OpticoachModel:
     '''
@@ -45,8 +41,6 @@ class OpticoachModel:
         self.__preprocessedFiles = preprocessor.preprocessedFiles
         self.build()
 
-<<<<<<< HEAD
-
     def __build(self):
         '''
         Build the recurrent neural network.
@@ -55,16 +49,6 @@ class OpticoachModel:
         https://chatgpt.com/share/67f4a398-42f8-8012-9c56-9538846a97b0
         '''
 
-=======
-    def __build(self):
-        '''
-        Build the recurrent neural network.
-        https://www.tensorflow.org/guide/keras/working_with_rnns
-        https://keras.io/api/layers/recurrent_layers/gru/
-        https://chatgpt.com/share/67f4a398-42f8-8012-9c56-9538846a97b0
-        '''
-
->>>>>>> 77f0501 (Drafted Model Architecture & revise sw arch)
         # We first accept an input batch of coaches. For each coach, a time-ordered sequence of
         # coaching metrics will be provided. In order to accomodate gaps in the data, a
         # masking is used to cover missing time steps and missing metrics.
@@ -74,10 +58,6 @@ class OpticoachModel:
             mask_value=0.0,
             input=(maxTimeStepCount, maxMetricCount)
         )
-<<<<<<< HEAD
-        
-=======
->>>>>>> 77f0501 (Drafted Model Architecture & revise sw arch)
         # In order to handle long-term dependencies and avoid overfitting on out small data set
         # we will utilize a Gated Recurrent Unit (GRU). Dropout and regularization are also
         # supplemented in order to avoid overfitting.
@@ -87,10 +67,6 @@ class OpticoachModel:
             recurrent_dropout=0.2,
             kernel_regularizer='l2'
         )(input)
-<<<<<<< HEAD
-        
-=======
->>>>>>> 77f0501 (Drafted Model Architecture & revise sw arch)
         # In order to interpret the GRU output, a Dense layer is added. Dropout is ommited
         # following this layer because that adds imprecision to regression tasks.
         hidden = Dense(
@@ -98,10 +74,6 @@ class OpticoachModel:
             activation='relu',
             kernel_regularizer='l2'
         )
-<<<<<<< HEAD
-        
-=======
->>>>>>> 77f0501 (Drafted Model Architecture & revise sw arch)
         # Finally, a few key coaching success metrics are trained on and predicted. For the
         # purpose of precise regression, linear activation is used.
         outputMetricCount = 10
@@ -113,19 +85,11 @@ class OpticoachModel:
         model = Model(inputs=input, outputs=output)
         save_pkl(model, 'model.pkl')
         self.modelFiles['model'] = 'model.pkl'
-<<<<<<< HEAD
-
-=======
->>>>>>> 77f0501 (Drafted Model Architecture & revise sw arch)
 
     def train(self):
         '''
         Train the recurrent neural network.
         '''
-<<<<<<< HEAD
-
-=======
->>>>>>> 77f0501 (Drafted Model Architecture & revise sw arch)
         featureScaler, labelScaler = MinMaxScaler(), MinMaxScaler()
         # TO-DO: fit_transform training data, transform validation data
 
