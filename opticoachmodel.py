@@ -34,21 +34,11 @@ class OpticoachModel:
     This `void` function makes predictions, updating the files referenced by predictedFiles.
     '''
 
-
     def __init__(self, preprocessor):
         self.modelFiles = {}
         self.predictedFiles = {}
         self.__preprocessedFiles = preprocessor.preprocessedFiles
         self.build()
-
-
-    def __build(self):
-        '''
-        Build the recurrent neural network.
-        https://www.tensorflow.org/guide/keras/working_with_rnns
-        https://keras.io/api/layers/recurrent_layers/gru/
-        https://chatgpt.com/share/67f4a398-42f8-8012-9c56-9538846a97b0
-        '''
 
     def __build(self):
         '''
@@ -117,7 +107,6 @@ class OpticoachModel:
         model.fit()
         save_pkl(model, 'model.pkl')
         return
-
 
     def predict(self):
         model = load_pkl(self.modelFiles['model'])
