@@ -111,8 +111,8 @@ class OpticoachModel:
         model.fit()
         save_pkl(model, 'model.pkl')
         return
-   
-    
+
+
     def predict(self):
         model = load_pkl(self.modelFiles['model'])
         # Make prediction, save pkl, and update predictedFiles
