@@ -5,6 +5,7 @@ import numpy as np
 from sklearn.preprocessing import MinMaxScaler
 from utilities import save_pkl, load_pkl
 
+
 class OpticoachModel:
     '''
     ### class OpticoachModel
@@ -34,11 +35,13 @@ class OpticoachModel:
     This `void` function makes predictions, updating the files referenced by predictedFiles.
     '''
 
+
     def __init__(self, preprocessor):
         self.modelFiles = {}
         self.predictedFiles = {}
         self.__preprocessedFiles = preprocessor.preprocessedFiles
         self.build()
+
 
     def __build(self):
         '''
@@ -57,6 +60,7 @@ class OpticoachModel:
             mask_value=0.0,
             input=(maxTimeStepCount, maxMetricCount)
         )
+        
         # In order to handle long-term dependencies and avoid overfitting on out small data set
         # we will utilize a Gated Recurrent Unit (GRU). Dropout and regularization are also
         # supplemented in order to avoid overfitting.
@@ -66,6 +70,7 @@ class OpticoachModel:
             recurrent_dropout=0.2,
             kernel_regularizer='l2'
         )(input)
+        
         # In order to interpret the GRU output, a Dense layer is added. Dropout is ommited
         # following this layer because that adds imprecision to regression tasks.
         hidden = Dense(
@@ -73,6 +78,7 @@ class OpticoachModel:
             activation='relu',
             kernel_regularizer='l2'
         )
+        
         # Finally, a few key coaching success metrics are trained on and predicted. For the
         # purpose of precise regression, linear activation is used.
         outputMetricCount = 10
@@ -85,10 +91,12 @@ class OpticoachModel:
         save_pkl(model, 'model.pkl')
         self.modelFiles['model'] = 'model.pkl'
 
+
     def train(self):
         '''
         Train the recurrent neural network.
         '''
+
         featureScaler, labelScaler = MinMaxScaler(), MinMaxScaler()
         # TO-DO: fit_transform training data, transform validation data
 
@@ -103,6 +111,7 @@ class OpticoachModel:
         model.fit()
         save_pkl(model, 'model.pkl')
         return
+   
     
     def predict(self):
         model = load_pkl(self.modelFiles['model'])
