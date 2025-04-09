@@ -15,10 +15,10 @@
 # influence later outputs).
 
 import optuna # to install, enter this in the terminal: conda install -c conda-forge optuna
-from keras.models import Sequential
-from keras.layers import LSTM, Dense, BatchNormalization
-from keras.callbacks import EarlyStopping
-from keras.optimizers import Adam
+from keras.src.models import Sequential
+from keras.src.layers import LSTM, Dense, BatchNormalization
+from keras.src.callbacks import EarlyStopping
+from keras.src.optimizers import Adam
 
 # Define the input shape (e.g., sequences of length 10 with 1 feature per time step)
 input_shape = (10, 1)

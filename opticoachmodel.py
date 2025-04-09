@@ -1,6 +1,7 @@
 from keras.src import Model
 from keras.src.callbacks import ReduceLROnPlateau
-from keras.src.layers import Masking, GRU, Dense
+from keras.src.layers import Masking, LSTM, Dense
+from keras.src.optimizers import Adam
 import numpy as np
 from sklearn.preprocessing import MinMaxScaler
 from utilities import save_pkl, load_pkl
@@ -10,14 +11,14 @@ class OpticoachModel:
     ### class OpticoachModel
     This `class` predicts label values using a recurrent neural network.
 
+    ### dict __preprocessedFiles
+    This `dict` variable stores `string` keys of all preprocessed files and `string` values of file names.
+
     ### dict modelFiles
     This `dict` stores `string` keys of all model related files and `string` values of file names.
 
     ### dict predictedFiles
     This `dict` stores `string` keys of prediction files and `string` values of file names.
-
-    ### dict __preprocessedFiles
-    This `dict` variable stores `string` keys of all preprocessed files and `string` values of file names.
 
     ### void __init__(self, Preprocessor preprocessor)
     This `void` function is called as the constructor for an OpticoachModel object, initializing the variable
@@ -48,43 +49,45 @@ class OpticoachModel:
         https://chatgpt.com/share/67f4a398-42f8-8012-9c56-9538846a97b0
         '''
 
+        timeStepCount = 75
+        metricCount = 30
+
         # We first accept an input batch of coaches. For each coach, a time-ordered sequence of
         # coaching metrics will be provided. In order to accomodate gaps in the data, a
-        # masking is used to cover missing time steps and missing metrics.
-        maxTimeStepCount = 75
-        maxMetricCount = 30
-        input = Masking(
+        # masking is used to cover missing time steps and missing metrics. There will be gaps in the
+        # time sequence in which a coach was not a head coach, and gaps in the metrics if data is
+        # not available.
+        maskedInput = Masking(
             mask_value=0.0,
-            input=(maxTimeStepCount, maxMetricCount)
+            input=(timeStepCount, metricCount)
         )
         
-        # In order to handle long-term dependencies and avoid overfitting on out small data set
-        # we will utilize a Gated Recurrent Unit (GRU). Dropout and regularization are also
-        # supplemented in order to avoid overfitting.
-        gru = GRU(
-            64,
+        # In order to handle long-term dependencies we will utilize a Long Short Term-Memory (LSTM)
+        # layer. Dropout and regularization are also supplemented in order to avoid overfitting.
+        # We use chat's rule of thumb, lstm_units = min(128, max(32, features * 2)).
+        lstm = LSTM(
+            160,
             dropout=0.2,
             recurrent_dropout=0.2,
             kernel_regularizer='l2'
-        )(input)
+        )(maskedInput)
         
-        # In order to interpret the GRU output, a Dense layer is added. Dropout is ommited
+        # In order to interpret the LSTM output, a Dense layer is added. Dropout is ommited
         # following this layer because that adds imprecision to regression tasks.
         hidden = Dense(
             64,
             activation='relu',
             kernel_regularizer='l2'
-        )
+        )(lstm)
         
         # Finally, a few key coaching success metrics are trained on and predicted. For the
         # purpose of precise regression, linear activation is used.
-        outputMetricCount = 10
-        output = Dense(
-            outputMetricCount,
+        denseOutput = Dense(
+            metricCount,
             activation='linear'
-        )
+        )(hidden)
 
-        model = Model(inputs=input, outputs=output)
+        model = Model(inputs=maskedInput, outputs=denseOutput)
         save_pkl(model, 'model.pkl')
         self.modelFiles['model'] = 'model.pkl'
 
@@ -93,18 +96,36 @@ class OpticoachModel:
         Train the recurrent neural network.
         '''
 
-        featureScaler, labelScaler = MinMaxScaler(), MinMaxScaler()
-        # TO-DO: fit_transform training data, transform validation data
+        xScaler, yScaler = MinMaxScaler(), MinMaxScaler()
+        tX = load_pkl(self.__preprocessedFiles['trainX'])
+        tY = load_pkl(self.__preprocessedFiles['trainY'])
+        vX = load_pkl(self.__preprocessedFiles['validX'])
+        vY = load_pkl(self.__preprocessedFiles['validY'])
+        tXs = xScaler.fit_transform(tX)
+        vXs = xScaler.transform(vX)
+        tYs = yScaler.fit_transform(tY)
+        vYs = yScaler.transform(vY)
 
-        save_pkl(featureScaler, 'featureScaler.pkl')
-        self.modelFiles['featureScaler'] = 'featureScaler.pkl'
-        save_pkl(labelScaler, 'labelScaler.pkl')
-        self.modelFiles['labelScaler'] = 'labelScaler.pkl'
+        save_pkl(xScaler, 'xScaler.pkl')
+        self.modelFiles['xScaler'] = 'xScaler.pkl'
+        save_pkl(yScaler, 'yScaler.pkl')
+        self.modelFiles['yScaler'] = 'yScaler.pkl'
 
-        reduce_lr = ReduceLROnPlateau(monitor='val_loss', factor=0.5, patience=3, min_lr=1e-6)
-        model = load_pkl(self.modelFiles['model'])
-        model.compile()
-        model.fit()
+        learningRateReducer = ReduceLROnPlateau(monitor='val_loss', factor=0.5, patience=3, min_lr=1e-6)
+        model = Model(load_pkl(self.modelFiles['model']))
+        model.compile(
+            optimizer=Adam(learning_rate=1e-2),
+            loss='mse',
+            metrics=['mse', 'mae']
+        )
+        model.fit(
+            tXs, tYs,
+            batch_size=16,
+            epochs=100,
+            verbose=2,
+            callbacks=learningRateReducer,
+            validation_data=(vXs, vYs)
+        )
         save_pkl(model, 'model.pkl')
         return
 
