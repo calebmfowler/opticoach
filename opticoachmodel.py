@@ -97,18 +97,20 @@ class OpticoachModel:
         '''
 
         xScaler, yScaler = MinMaxScaler(), MinMaxScaler()
+
         tX = load_pkl(self.__preprocessedFiles['trainX'])
         tY = load_pkl(self.__preprocessedFiles['trainY'])
         vX = load_pkl(self.__preprocessedFiles['validX'])
         vY = load_pkl(self.__preprocessedFiles['validY'])
+
         tXs = xScaler.fit_transform(tX)
         vXs = xScaler.transform(vX)
         tYs = yScaler.fit_transform(tY)
         vYs = yScaler.transform(vY)
 
         save_pkl(xScaler, 'xScaler.pkl')
-        self.modelFiles['xScaler'] = 'xScaler.pkl'
         save_pkl(yScaler, 'yScaler.pkl')
+        self.modelFiles['xScaler'] = 'xScaler.pkl'
         self.modelFiles['yScaler'] = 'yScaler.pkl'
 
         learningRateReducer = ReduceLROnPlateau(monitor='val_loss', factor=0.5, patience=3, min_lr=1e-6)
@@ -126,11 +128,33 @@ class OpticoachModel:
             callbacks=learningRateReducer,
             validation_data=(vXs, vYs)
         )
+
         save_pkl(model, 'model.pkl')
+        self.modelFiles['model'] = 'model.pkl'
+
         return
 
     def predict(self):
-        model = load_pkl(self.modelFiles['model'])
-        # Make prediction, save pkl, and update predictedFiles
-        self.predictedFiles = {}
+        model = Model(load_pkl(self.modelFiles['model']))
+
+        xScaler = MinMaxScaler(load_pkl(self.modelFiles['xScaler']))
+        yScaler = MinMaxScaler(load_pkl(self.modelFiles['yScaler']))
+
+        tX = load_pkl(self.__preprocessedFiles['trainX'])
+        vX = load_pkl(self.__preprocessedFiles['validX'])
+
+        tXs = xScaler.transform(tX)
+        vXs = xScaler.transform(vX)
+
+        tPs = model.predict(tXs)
+        vPs = model.predict(vXs)
+
+        tP = yScaler.inverse_transform(tPs)
+        vP = yScaler.inverse_transform(vPs)
+
+        save_pkl(tP, 'trainP.pkl')
+        save_pkl(vP, 'validP.pkl')
+        self.modelFiles['trainP'] = 'trainP.pkl'
+        self.modelFiles['validP'] = 'validP.pkl'
+
         return
