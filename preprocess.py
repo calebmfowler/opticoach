@@ -51,9 +51,9 @@ class Preprocessor:
         print(testGameHistoryDF)
 
         self.preprocessedFiles = {
-            "trainX": "trainX.pkl",
-            "trainY": "trainY.pkl",
-            "validX": "validX.pkl",
-            "validY": "validY.pkl"
+            "trainX": "files/trainX.pkl",
+            "trainY": "files/trainY.pkl",
+            "validX": "files/validX.pkl",
+            "validY": "files/validY.pkl"
         }
         return

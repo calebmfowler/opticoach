@@ -98,8 +98,8 @@ class OpticoachModel:
         )(hidden)
 
         model = Model(inputs=maskedInput, outputs=denseOutput)
-        save_pkl(model, 'model.pkl')
-        self.modelFiles['model'] = 'model.pkl'
+        save_pkl(model, 'files/model.pkl')
+        self.modelFiles['model'] = 'files/model.pkl'
 
     def train(self):
         '''
@@ -118,10 +118,10 @@ class OpticoachModel:
         tYs = yScaler.fit_transform(tY)
         vYs = yScaler.transform(vY)
 
-        save_pkl(xScaler, 'xScaler.pkl')
-        save_pkl(yScaler, 'yScaler.pkl')
-        self.modelFiles['xScaler'] = 'xScaler.pkl'
-        self.modelFiles['yScaler'] = 'yScaler.pkl'
+        save_pkl(xScaler, 'files/xScaler.pkl')
+        save_pkl(yScaler, 'files/yScaler.pkl')
+        self.modelFiles['xScaler'] = 'files/xScaler.pkl'
+        self.modelFiles['yScaler'] = 'files/yScaler.pkl'
 
         learningRateReducer = ReduceLROnPlateau(monitor='val_loss', factor=0.5, patience=3, min_lr=1e-6)
         model = Model(load_pkl(self.modelFiles['model']))
@@ -139,8 +139,8 @@ class OpticoachModel:
             validation_data=(vXs, vYs)
         )
 
-        save_pkl(model, 'model.pkl')
-        self.modelFiles['model'] = 'model.pkl'
+        save_pkl(model, 'files/model.pkl')
+        self.modelFiles['model'] = 'files/model.pkl'
 
         return
 
@@ -162,9 +162,9 @@ class OpticoachModel:
         tP = yScaler.inverse_transform(tPs)
         vP = yScaler.inverse_transform(vPs)
 
-        save_pkl(tP, 'trainP.pkl')
-        save_pkl(vP, 'validP.pkl')
-        self.modelFiles['trainP'] = 'trainP.pkl'
-        self.modelFiles['validP'] = 'validP.pkl'
+        save_pkl(tP, 'files/trainP.pkl')
+        save_pkl(vP, 'files/validP.pkl')
+        self.modelFiles['trainP'] = 'files/trainP.pkl'
+        self.modelFiles['validP'] = 'files/validP.pkl'
 
         return
