@@ -1,8 +1,10 @@
+from copy import deepcopy
 from keras.src import Model
 from keras.src.callbacks import ReduceLROnPlateau
 from keras.src.layers import Masking, LSTM, Dense
 from keras.src.optimizers import Adam
 import numpy as np
+from preprocess import Preprocessor
 from sklearn.preprocessing import MinMaxScaler
 from utilities import save_pkl, load_pkl
 
@@ -35,11 +37,19 @@ class OpticoachModel:
     This `void` function makes predictions, updating the files referenced by predictedFiles.
     '''
 
-    def __init__(self, preprocessor):
-        self.modelFiles = {}
-        self.predictedFiles = {}
-        self.__preprocessedFiles = preprocessor.preprocessedFiles
-        self.build()
+    def __init__(self, arg):
+        if type(arg) == Preprocessor:
+            self.modelFiles = {}
+            self.predictedFiles = {}
+            self.__preprocessedFiles = Preprocessor(arg).preprocessedFiles
+            self.__build()
+        elif type(arg) == OpticoachModel:
+            self.__preprocessedFiles = deepcopy(arg.__preprocessedFiles)
+            self.modelFiles = deepcopy(arg.modelFiles)
+            self.predictedFiles = deepcopy(arg.predictedFiles)
+        else:
+            raise Exception("Incorrect arguments for OpticoachModel.__init__(self, preprocessor)")
+        return
 
     def __build(self):
         '''
