@@ -1,3 +1,4 @@
+from pandas import DataFrame
 import pickle as pkl
 import json
 
@@ -26,3 +27,22 @@ def load_json(filename='MISSING_FILENAME.json'):
     file.close()
     print(f"Data loaded from {filename}")
     return data
+
+def traverse_dictionary(data, path=[]):
+    for key, value in dict(data).items():
+        if isinstance(value, dict):
+            yield from traverse_dictionary(value, path + [key])
+        else:
+            yield path + [key, value]
+
+def tabulate_dictionary(data, columnDepth, indexDepth, valueDepth):
+    
+    retabulatedData = DataFrame()
+
+    for element in traverse_dictionary(data):
+        index = element[indexDepth]
+        value = element[valueDepth]
+        column = element[columnDepth]
+        retabulatedData.loc[index, column] = value
+    
+    return retabulatedData

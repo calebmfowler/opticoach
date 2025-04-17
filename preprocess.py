@@ -1,7 +1,7 @@
 from aggregate import Aggregator
 from copy import deepcopy
 from pandas import Series, DataFrame, json_normalize, read_json
-from utilities import load_json
+from utilities import load_json, tabulate_dictionary
 
 class Preprocessor:
     '''
@@ -37,18 +37,10 @@ class Preprocessor:
     def preprocess(self):
         # Here we load in the data compiled by our Aggregator
         testCoachHistoryJSON = load_json(self.__aggregatedFiles['testCoachHistory'])
-        testCoachHistoryDF = DataFrame(testCoachHistoryJSON).T
-        testCoachHistoryDF.rename_axis('school.year.role')
-        testCoachHistoryDF.reset_index().rename(columns={0: 'name'})
-        
-        testCoachHistoryDF = testCoachHistoryDF.stack().apply(Series)
-
-
-        testGameHistoryDF = load_json(self.__aggregatedFiles['testGameHistory'])
-        testGameHistoryDF = json_normalize(testGameHistoryDF, max_level=1)
-
-        print(testCoachHistoryDF)
-        print(testGameHistoryDF)
+        schoolDF = tabulate_dictionary(testCoachHistoryJSON, columnDepth=3, indexDepth=1, valueDepth=0)
+        roleDF = tabulate_dictionary(testCoachHistoryJSON, columnDepth=3, indexDepth=1, valueDepth=2)
+        print(schoolDF)
+        print(roleDF)
 
         self.preprocessedFiles = {
             "trainX": "files/trainX.pkl",
