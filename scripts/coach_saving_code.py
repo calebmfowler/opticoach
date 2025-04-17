@@ -767,7 +767,7 @@ total_fail_list = []
 url_list[105] = 'https://en.wikipedia.org/wiki/Category:Louisiana%E2%80%93Monroe_Warhawks_football_coaches'
 
 # # Open the JSON file
-# with open('coach_history.json') as f:
+# with open('../coach_history.json') as f:
 #     schools_dict = json.load(f)
 
 # counter = 165
@@ -775,23 +775,23 @@ url_list[105] = 'https://en.wikipedia.org/wiki/Category:Louisiana%E2%80%93Monroe
 #     print('School ', counter)
 #     print(i)
 #     schools_dict, fail_list, fail_list_missing = coaches_to_dict(schools_dict, i)
-#     with open('coach_history.json', 'w') as json_file:
+#     with open('../coach_history.json', 'w') as json_file:
 #         json.dump(schools_dict, json_file, indent=4)
 #     for j in fail_list:
 #         total_fail_list.append(j)
 #     counter += 1
 
-# with open('coach_history.json') as f:
+# with open('../coach_history.json') as f:
 #     schools_dict = json.load(f)
 
 # data = pro_format(my_csv, link)
 # schools_dict, fail_list, fail_list_missing = coaches_to_dict(schools_dict, i)
-    # with open('coach_history.json', 'w') as json_file:
+    # with open('../coach_history.json', 'w') as json_file:
     #     json.dump(schools_dict, json_file, indent=4)
 
 
 # # Open the JSON file
-# with open('coach_history.json') as f:
+# with open('../coach_history.json') as f:
 #     schools_dict = json.load(f)
 
 schools_dict = {}
@@ -830,7 +830,7 @@ for i in fail_list:
     # print('pro')
     list_to_dict(schools_dict, data[0], data[1], data[2], coach_name)
 
-# with open('coach_history.json', 'w') as json_file:
+# with open('../coach_history.json', 'w') as json_file:
 #     json.dump(schools_dict, json_file, indent=4)
 
 
