@@ -39,8 +39,6 @@ class Preprocessor:
         testCoachHistoryJSON = load_json(self.__aggregatedFiles['testCoachHistory'])
         schoolDF = tabulate_dictionary(testCoachHistoryJSON, columnDepth=3, indexDepth=1, valueDepth=0)
         roleDF = tabulate_dictionary(testCoachHistoryJSON, columnDepth=3, indexDepth=1, valueDepth=2)
-        print(schoolDF)
-        print(roleDF)
 
         self.preprocessedFiles = {
             "trainX": "files/trainX.pkl",
