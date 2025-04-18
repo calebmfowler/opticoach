@@ -4,33 +4,128 @@ from pandas import DataFrame, Series
 import pickle as pkl
 import json
 
+
 def save_pkl(data, filename='MISSING_FILENAME.pkl'):
+    """
+    Save data to a pickle (.pkl) file.
+
+    Parameters:
+    -----------
+    data : any
+        The Python object to be serialized and saved.
+    filename : str, optional
+        The name of the file to save the data to. Defaults to 'MISSING_FILENAME.pkl'.
+
+    Returns:
+    --------
+    None
+        Prints a confirmation message when saving is complete.
+    """
+
     file = open(filename, 'wb')
     pkl.dump(data, file)
     file.close()
     print(f"Data saved to {filename}")
 
+
 def load_pkl(filename='MISSING_FILENAME.pkl'):
+    """
+    Load and deserialize a Python object from a pickle (.pkl) file.
+
+    Parameters:
+    -----------
+    filename : str, optional
+        The name of the pickle file to load. Defaults to 'MISSING_FILENAME.pkl'.
+
+    Returns:
+    --------
+    data : any
+        The Python object that was deserialized from the file.
+
+    Side Effects:
+    -------------
+    Prints a confirmation message upon successful loading.
+    """
+
     file = open(filename, 'rb')
     data = pkl.load(file)
     file.close()
     print(f"Data loaded from {filename}")
     return data
 
+
 def save_json(data, filename='MISSING_FILENAME.json'):
+    """
+    Save data to a JSON file.
+
+    Parameters:
+    -----------
+    data : dict or list
+        The data to be serialized into JSON format.
+    filename : str, optional
+        The name of the file to save the data to. Defaults to 'MISSING_FILENAME.json'.
+
+    Returns:
+    --------
+    None
+        Prints a confirmation message upon successful save.
+    """
+
     file = open(filename, 'wb')
     json.dump(data, file)
     file.close()
     print(f"Data saved to {filename}")
 
+
 def load_json(filename='MISSING_FILENAME.json'):
+    """
+    Load and deserialize data from a JSON file.
+
+    Parameters:
+    -----------
+    filename : str, optional
+        The name of the JSON file to load. Defaults to 'MISSING_FILENAME.json'.
+
+    Returns:
+    --------
+    data : dict or list
+        The data deserialized from the JSON file.
+
+    Side Effects:
+    -------------
+    Prints a confirmation message upon successful loading.
+    """
+
     file = open(filename, 'rb')
     data = json.load(file)
     file.close()
     print(f"Data loaded from {filename}")
     return data
 
+
 def traverse_dictionary(data, path=[]):
+    """
+    Recursively traverse a nested dictionary and yield paths to each terminal value.
+
+    Parameters:
+    -----------
+    data : dict
+        The dictionary to traverse. Can include nested dictionaries and lists.
+    path : list, optional
+        The current traversal path (used internally during recursion). Defaults to an empty list.
+
+    Yields:
+    -------
+    list
+        A list representing the full path from the root to each terminal value or values in lists.
+
+    Notes:
+    ------
+    - If a value is a nested dictionary, the function recurses deeper.
+    - If a value is a list, each list item is appended to the path.
+    - If a value is a scalar, it is returned as the last item in the path.
+    """
+
     for key, value in dict(data).items():
         if isinstance(value, dict):
             yield from traverse_dictionary(value, path + [key])
@@ -91,7 +186,39 @@ def tabulate_dictionary(data, columnDepth, indexDepth, valueDepth):
     tabulatedData = DataFrame.from_dict(collectedDictionary, orient='index')
     return tabulatedData
 
+
 def serialize_dictionary(data, indexDepth, valueDepth):
+    """
+    Traverse and flatten a nested dictionary into a structured pandas DataFrame.
+
+    Parameters:
+    -----------
+    data : dict
+        The nested dictionary to be serialized. Can include nested dicts and lists.
+    
+    indexDepth : int or list of ints
+        Specifies the position(s) in each traversal path to use as the row index in the resulting DataFrame.
+        - If an int, selects a single element from the path.
+        - If a list of ints, combines multiple elements into a single string index.
+    
+    valueDepth : int, list of ints, or tuple
+        Specifies the position(s) in each traversal path to extract as the value for each row.
+        - If an int, selects a single value.
+        - If a list of ints, joins multiple values into a comma-separated string.
+        - If a tuple (start, end), slices the path to return a sublist. If end is None, slices to the end.
+    
+    Returns:
+    --------
+    serializedData : pandas.DataFrame
+        A DataFrame with index based on `indexDepth` and values extracted using `valueDepth`.
+
+    Notes:
+    ------
+    - Uses `traverse_dictionary()` to yield all paths from the input dictionary.
+    - Aggregates values based on index/value positions and reshapes them into a DataFrame.
+    - The resulting DataFrame has one row per unique index and one or more columns of extracted values.
+    """
+
     collectedData = []
     for element in traverse_dictionary(data):
         if isinstance(indexDepth, list):
@@ -115,7 +242,33 @@ def serialize_dictionary(data, indexDepth, valueDepth):
     serializedData = DataFrame.from_dict(collectedDictionary, orient='index')
     return serializedData
 
+
 def bound(df, start, end):
+    """
+    Restrict a DataFrame to a specified range of integer-based index values.
+
+    Parameters:
+    -----------
+    df : pandas.DataFrame
+        The DataFrame whose index will be filtered and sorted.
+    
+    start : int
+        The starting index value (inclusive) of the desired range.
+    
+    end : int
+        The ending index value (inclusive) of the desired range.
+
+    Returns:
+    --------
+    pandas.DataFrame
+        A new DataFrame containing only the rows within the specified index range, sorted by index.
+
+    Notes:
+    ------
+    - Converts the index to integers before filtering.
+    - Sorts the DataFrame by its index prior to slicing.
+    """
+
     df.index = df.index.astype(int)
     df = df.sort_index().loc[start:end]
     return df
