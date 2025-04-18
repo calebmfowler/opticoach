@@ -1,7 +1,7 @@
 from aggregate import Aggregator
 from copy import deepcopy
 from pandas import Series, DataFrame, json_normalize, read_json
-from utilities import load_json, tabulate_dictionary
+from utilities import load_json, serialize_dictionary, tabulate_dictionary
 
 class Preprocessor:
     '''
@@ -35,10 +35,21 @@ class Preprocessor:
         return
 
     def preprocess(self):
-        # Here we load in the data compiled by our Aggregator
-        testCoachHistoryJSON = load_json(self.__aggregatedFiles['testCoachHistory'])
-        schoolDF = tabulate_dictionary(testCoachHistoryJSON, columnDepth=3, indexDepth=1, valueDepth=0)
-        roleDF = tabulate_dictionary(testCoachHistoryJSON, columnDepth=3, indexDepth=1, valueDepth=2)
+        coachHistoryJSON = load_json('files/coach_history.json')
+        school_coach_year = tabulate_dictionary(coachHistoryJSON, columnDepth=3, indexDepth=1, valueDepth=0)
+        role_coach_year = tabulate_dictionary(coachHistoryJSON, columnDepth=3, indexDepth=1, valueDepth=2)
+
+        heismanJSON = load_json('files/heismans.json')
+        heismanSeries = serialize_dictionary(heismanJSON, indexDepth=0, valueDepth=2)
+        heismanSchool_year = heismanSeries.reindex(school_coach_year.index)
+        heisman_coach_year = school_coach_year.eq(heismanSchool_year, axis=0)
+        
+        pollsJSON = load_json('files/polls.json')
+        rank_school_year = tabulate_dictionary(pollsJSON, columnDepth=3, indexDepth=[0, 1], valueDepth=2)
+        
+        # import records
+
+        # convert all tables to numerical datatypes
 
         self.preprocessedFiles = {
             "trainX": "files/trainX.pkl",

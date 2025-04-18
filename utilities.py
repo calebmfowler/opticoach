@@ -1,4 +1,6 @@
-from pandas import DataFrame
+from collections import defaultdict
+from collections.abc import Iterable
+from pandas import DataFrame, Series
 import pickle as pkl
 import json
 
@@ -32,17 +34,42 @@ def traverse_dictionary(data, path=[]):
     for key, value in dict(data).items():
         if isinstance(value, dict):
             yield from traverse_dictionary(value, path + [key])
+        elif isinstance(value, list):
+            yield path + [key] + value
         else:
             yield path + [key, value]
 
-def tabulate_dictionary(data, columnDepth, indexDepth, valueDepth):
-    
-    retabulatedData = DataFrame()
 
+def tabulate_dictionary(data, columnDepth, indexDepth, valueDepth):
+    collectedData = []
+    for element in traverse_dictionary(data):
+        if isinstance(indexDepth, list):
+            index = ', '.join([element[i] for i in indexDepth])
+        else:
+            index = element[indexDepth]
+        if isinstance(valueDepth, list):
+            value = ', '.join([element[i] for i in valueDepth])
+        else:
+            value = element[valueDepth]
+        if isinstance(columnDepth, list):
+            column = ', '.join([element[i] for i in columnDepth])
+        else:
+            column = element[columnDepth]
+        collectedData.append((index, column, value))
+    collectedDictionary = defaultdict(dict)
+    for index, column, value in collectedData:
+        collectedDictionary[index][column] = value
+    tabulatedData = DataFrame.from_dict(collectedDictionary, orient='index')
+    return tabulatedData
+
+def serialize_dictionary(data, indexDepth, valueDepth):
+    collectedData = []
     for element in traverse_dictionary(data):
         index = element[indexDepth]
         value = element[valueDepth]
-        column = element[columnDepth]
-        retabulatedData.loc[index, column] = value
-    
-    return retabulatedData
+        collectedData.append((index, value))
+    collectedDictionary = defaultdict(dict)
+    for index, value in collectedData:
+        collectedDictionary[index] = value
+    serializedData = DataFrame.from_dict(collectedDictionary, orient='index')
+    return serializedData
