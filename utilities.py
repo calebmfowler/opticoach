@@ -41,6 +41,28 @@ def traverse_dictionary(data, path=[]):
 
 
 def tabulate_dictionary(data, columnDepth, indexDepth, valueDepth):
+    """
+    Converts a nested dictionary into a tabular format using specified depths for columns, 
+    indices, and values.
+
+    Args:
+        data (dict): The input dictionary to be tabulated.
+        columnDepth (int or list): The depth(s) in the dictionary to be used as columns.
+        indexDepth (int or list): The depth(s) in the dictionary to be used as indices.
+        valueDepth (int or list): The depth(s) in the dictionary to be used as values.
+
+    Returns:
+        pandas.DataFrame: A DataFrame representing the tabulated data.
+
+    Example:
+        >>> data = {
+        ...     "A": {"X": {"value": 1}, "Y": {"value": 2}},
+        ...     "B": {"X": {"value": 3}, "Y": {"value": 4}}
+        ... }
+        >>> tabulated = tabulate_dictionary(data, columnDepth=1, indexDepth=0, valueDepth=2)
+        >>> print(tabulated)
+    """
+    
     collectedData = []
     for element in traverse_dictionary(data):
         if isinstance(indexDepth, list):
