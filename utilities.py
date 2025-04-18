@@ -49,6 +49,12 @@ def tabulate_dictionary(data, columnDepth, indexDepth, valueDepth):
             index = element[indexDepth]
         if isinstance(valueDepth, list):
             value = ', '.join([element[i] for i in valueDepth])
+        elif isinstance(valueDepth, tuple):
+            a, b = valueDepth
+            if b == None:
+                value = element[a:]
+            else:
+                value = element[a:b]
         else:
             value = element[valueDepth]
         if isinstance(columnDepth, list):
@@ -65,11 +71,28 @@ def tabulate_dictionary(data, columnDepth, indexDepth, valueDepth):
 def serialize_dictionary(data, indexDepth, valueDepth):
     collectedData = []
     for element in traverse_dictionary(data):
-        index = element[indexDepth]
-        value = element[valueDepth]
+        if isinstance(indexDepth, list):
+            index = ', '.join([element[i] for i in indexDepth])
+        else:
+            index = element[indexDepth]
+        if isinstance(valueDepth, list):
+            value = ', '.join([element[i] for i in valueDepth])
+        elif isinstance(valueDepth, tuple):
+            a, b = valueDepth
+            if b == None:
+                value = element[a:]
+            else:
+                value = element[a:b]
+        else:
+            value = element[valueDepth]
         collectedData.append((index, value))
     collectedDictionary = defaultdict(dict)
     for index, value in collectedData:
         collectedDictionary[index] = value
     serializedData = DataFrame.from_dict(collectedDictionary, orient='index')
     return serializedData
+
+def bound(df, start, end):
+    df.index = df.index.astype(int)
+    df = df.sort_index().loc[start:end]
+    return df

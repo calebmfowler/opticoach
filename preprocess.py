@@ -1,7 +1,7 @@
 from aggregate import Aggregator
 from copy import deepcopy
 from pandas import Series, DataFrame, json_normalize, read_json
-from utilities import load_json, serialize_dictionary, tabulate_dictionary
+from utilities import bound, load_json, serialize_dictionary, tabulate_dictionary
 
 class Preprocessor:
     '''
@@ -35,19 +35,29 @@ class Preprocessor:
         return
 
     def preprocess(self):
+        startYear, endYear = 1935, 2024
         coachHistoryJSON = load_json('files/coach_history.json')
-        school_coach_year = tabulate_dictionary(coachHistoryJSON, columnDepth=3, indexDepth=1, valueDepth=0)
-        role_coach_year = tabulate_dictionary(coachHistoryJSON, columnDepth=3, indexDepth=1, valueDepth=2)
+        
+        school_coach_year = bound(tabulate_dictionary(coachHistoryJSON, columnDepth=3, indexDepth=1, valueDepth=0), startYear, endYear)
+        print(school_coach_year)
+        # Need to remap to schools to consistent names
+        role_coach_year = bound(tabulate_dictionary(coachHistoryJSON, columnDepth=3, indexDepth=1, valueDepth=2), startYear, endYear)
+        print(role_coach_year)
+        # Need to remap to roles to consistent names
 
         heismanJSON = load_json('files/heismans.json')
-        heismanSeries = serialize_dictionary(heismanJSON, indexDepth=0, valueDepth=2)
-        heismanSchool_year = heismanSeries.reindex(school_coach_year.index)
-        heisman_coach_year = school_coach_year.eq(heismanSchool_year, axis=0)
+        heismanSchool_year = bound(serialize_dictionary(heismanJSON, indexDepth=0, valueDepth=2), startYear, endYear)
+        # Need to remap to schools to consistent names
+        heismanSchool_year = heismanSchool_year.reindex(school_coach_year.index)
+        heisman_coach_year = bound(school_coach_year.eq(heismanSchool_year, axis=0), startYear, endYear)
+        print(heisman_coach_year)
         
         pollsJSON = load_json('files/polls.json')
-        rank_school_year = tabulate_dictionary(pollsJSON, columnDepth=3, indexDepth=[0, 1], valueDepth=2)
+        pollsJSON = { year: weeks.get('Final') for year, weeks in pollsJSON.items() if 'Final' in weeks }
+        rank_school_year = tabulate_dictionary(pollsJSON, columnDepth=3, indexDepth=0, valueDepth=2).sort_index().loc[startYear:endYear]
         
-        # import records
+        recordsJSON = load_json('files/records.json')
+        record = tabulate_dictionary(recordsJSON, columnDepth=0, indexDepth=1, valueDepth=(2, None)).sort_index().loc[startYear:endYear]
 
         # convert all tables to numerical datatypes
 
