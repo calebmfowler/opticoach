@@ -1,6 +1,6 @@
 from aggregate import Aggregator
 from copy import deepcopy
-from pandas import Series, DataFrame, json_normalize, read_json
+from pandas import Series, to_numeric, DataFrame, json_normalize, read_json
 from utilities import bound, load_json, serialize_dictionary, tabulate_dictionary
 
 class Preprocessor:
@@ -35,7 +35,7 @@ class Preprocessor:
         return
 
     def preprocess(self):
-        startYear, endYear = 1935, 2024
+        startYear, endYear = 1936, 2024
         coachHistoryJSON = load_json('files/coach_history.json')
         
         school_coach_year = bound(tabulate_dictionary(coachHistoryJSON, columnDepth=3, indexDepth=1, valueDepth=0), startYear, endYear)
@@ -49,15 +49,16 @@ class Preprocessor:
         heismanSchool_year = bound(serialize_dictionary(heismanJSON, indexDepth=0, valueDepth=2), startYear, endYear)
         # Need to remap to schools to consistent names
         heismanSchool_year = heismanSchool_year.reindex(school_coach_year.index)
-        heisman_coach_year = bound(school_coach_year.eq(heismanSchool_year, axis=0), startYear, endYear)
+        heisman_coach_year = bound(school_coach_year.eq(heismanSchool_year, axis=0), startYear, endYear).astype(int)
         print(heisman_coach_year)
         
-        pollsJSON = load_json('files/polls.json')
-        pollsJSON = { year: weeks.get('Final') for year, weeks in pollsJSON.items() if 'Final' in weeks }
-        rank_school_year = tabulate_dictionary(pollsJSON, columnDepth=3, indexDepth=0, valueDepth=2).sort_index().loc[startYear:endYear]
-        
+        finalPollsJSON = load_json('files/final_polls.json')
+        rank_school_year = bound(tabulate_dictionary(finalPollsJSON, columnDepth=(2, None), indexDepth=0, valueDepth=1), startYear, endYear)
+        rank_school_year = rank_school_year.apply(to_numeric, errors='coerce').astype('Int64')
+        print(rank_school_year)
+
         recordsJSON = load_json('files/records.json')
-        record = tabulate_dictionary(recordsJSON, columnDepth=0, indexDepth=1, valueDepth=(2, None)).sort_index().loc[startYear:endYear]
+        record = bound(tabulate_dictionary(recordsJSON, columnDepth=0, indexDepth=1, valueDepth=(2, None)), startYear, endYear)
 
         # convert all tables to numerical datatypes
 

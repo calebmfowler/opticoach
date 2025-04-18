@@ -73,17 +73,18 @@ def tabulate_dictionary(data, columnDepth, indexDepth, valueDepth):
             value = ', '.join([element[i] for i in valueDepth])
         elif isinstance(valueDepth, tuple):
             a, b = valueDepth
-            if b == None:
-                value = element[a:]
-            else:
-                value = element[a:b]
+            value = element[a:b]
         else:
             value = element[valueDepth]
         if isinstance(columnDepth, list):
-            column = ', '.join([element[i] for i in columnDepth])
+            columnList = [element[i] for i in columnDepth]
+        elif isinstance(columnDepth, tuple):
+            a, b = columnDepth
+            columnList = element[a:b]
         else:
-            column = element[columnDepth]
-        collectedData.append((index, column, value))
+            columnList = [element[columnDepth]]
+        for column in columnList:
+            collectedData.append((index, column, value))
     collectedDictionary = defaultdict(dict)
     for index, column, value in collectedData:
         collectedDictionary[index][column] = value
