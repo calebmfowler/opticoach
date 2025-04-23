@@ -190,7 +190,8 @@ class Preprocessor:
             scoringOffense = sum(nparr(scoringOffense)) / gameCount
             scoringDefense = sum(nparr(scoringDefense)) / gameCount
             winRate = winCount / gameCount
-            return [scoringOffense, scoringDefense, winRate]
+            BCS_strength = BCS_sos(team, year)
+            return [scoringOffense, scoringDefense, winRate, BCS_strength]
 
         def annual_record_map(season):
             year = season.name
