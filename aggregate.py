@@ -26,6 +26,5 @@ class Aggregator:
         return
 
     def aggregate(self):
-        self.aggregatedFiles['testCoachHistory'] = 'files/testCoachHistory.json'
-        self.aggregatedFiles['testGameHistory'] = 'files/testGameHistory.json'
+        self.aggregatedFiles['example'] = 'files/tesexample.json'
         return

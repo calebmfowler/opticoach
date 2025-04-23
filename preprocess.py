@@ -47,10 +47,10 @@ class Preprocessor:
             self.preprocessedFiles = {}
         elif type(arg) == Preprocessor:
             self.__aggregatedFiles = deepcopy(arg.__aggregatedFiles)
-            self.__startYear = deepcopy(arg.__startYear)
-            self.__endYear = deepcopy(arg.__endYear)
-            self.__backgroundYears = deepcopy(arg.__backgroundYears)
-            self.__predictionYears = deepcopy(arg.__predictionYears)
+            self.startYear = deepcopy(arg.startYear)
+            self.endYear = deepcopy(arg.endYear)
+            self.backgroundYears = deepcopy(arg.backgroundYears)
+            self.predictionYears = deepcopy(arg.predictionYears)
             self.preprocessedFiles = deepcopy(arg.preprocessedFiles)
         else:
             raise Exception("Incorrect arguments for Preprocessor.__init__(self, aggregator)")
@@ -59,106 +59,123 @@ class Preprocessor:
     def preprocess(self):
         # === UTILITIES ===
         bound_years = lambda df : bound_df(df, self.startYear, self.endYear)
+        tabulate = lambda *args, **kwargs : DataFrame(bound_years(tabulate_dictionary(*args, **kwargs)))
+        serialize = lambda *args, **kwargs : Series(serialize(*args, **kwargs))
 
         # === FILE IMPORTS ===
         coachJSON = load_json('files/trimmed_coach_dictionary.json')
-        schoolJSON = load_json('files/mapping_schools.json')
+        schoolMapJSON = load_json('files/mapping_schools.json')
         heismanJSON = load_json('files/heismans.json')
         pollsJSON = load_json('files/final_polls.json')
         recordsJSON = load_json('files/records.json')
 
-        # === COMPILING METRICS ===
-        # --- "school" by "coach" by int(year) ---
-        school_coach_year = bound_years(tabulate_dictionary(coachJSON, columnDepth=3, indexDepth=0, valueDepth=1))
+        # === MAPS ===
         def schoolMap(school):
-            if school in schoolJSON:
-                return schoolJSON[school]
-            elif isnan(school):
+            if school in schoolMapJSON:
+                return schoolMapJSON[school]
+            elif school != school:
                 return ""
             else:
                 return str(school)
-        school_coach_year = school_coach_year.map(schoolMap)
-        print('\nschool_coach_year\n', school_coach_year)
-        
-        # --- "role" by "coach" by int(year) ---
-        role_coach_year = bound_years(tabulate_dictionary(coachJSON, columnDepth=3, indexDepth=0, valueDepth=2))
+            
         def roleMap(role):
             if role != role:
                 return ""
-            i = role.find('/')
-            if i != -1:
-                return str(role[:i])
             else:
-                return str(role)
+                role = str(role)
+                i = role.find('/')
+                if i != -1:
+                    return role[:i]
+                else:
+                    return role
+            
+        def rankMap(num):
+            if num != num:
+                return 30
+            else:
+                return int(num)
+        
+        def offensiveScores(record):
+            return [int(game[1].split('-')[0]) for game in record]
+        
+        def defensiveScores(record):
+            return [int(game[1].split('-')[1]) for game in record]
+        
+        def totalOffensiveScoreMap(record):
+            try:
+                return sum(nparr(offensiveScores(record), dtype=int))
+            except:
+                return 0
+
+        def totalDefensiveScoreMap(record):
+            try:
+                return sum(nparr(defensiveScores(record), dtype=int))
+            except:
+                return 0
+
+        def lossCountMap(record):
+            try:
+                return sum(nparr(
+                    [offense < defense for offense, defense in zip(offensiveScores(record), defensiveScores(record))]
+                , dtype=int))
+            except:
+                return 0
+    
+        def winCountMap(record):
+            try:
+                return sum(nparr(
+                    [offense > defense for offense, defense in zip(offensiveScores(record), defensiveScores(record))]
+                , dtype=int))
+            except:
+                return 0
+
+        # === METRICS COMPILATION ===
+        # --- "school" by "coach" by int(year) ---
+        school_coach_year = tabulate(coachJSON, columnDepth=3, indexDepth=0, valueDepth=1)
+        school_coach_year = school_coach_year.map(schoolMap)
+        print('\nschool_coach_year\n', school_coach_year)
+        metrics = []
+        
+        # --- "role" by "coach" by int(year) ---
+        '''role_coach_year = tabulate(coachJSON, columnDepth=3, indexDepth=0, valueDepth=2)
         role_coach_year = role_coach_year.map(roleMap)
-        metrics = [role_coach_year]
-        print('\nrole_coach_year\n', role_coach_year)
+        metrics.append(role_coach_year)
+        print('\nrole_coach_year\n', role_coach_year)'''
 
         # --- int(heisman) by "coach" by int(year) ---
-        heismanSchool_year = bound_years(serialize_dictionary(heismanJSON, indexDepth=0, valueDepth=2))
+        '''heismanSchool_year = serialize(heismanJSON, indexDepth=0, valueDepth=2)
         heismanSchool_year = heismanSchool_year.map(schoolMap)
         heismanSchool_year = heismanSchool_year.reindex(school_coach_year.index)
         heisman_coach_year = bound_years(school_coach_year.eq(heismanSchool_year, axis=0)).astype(int)
         metrics.append(heisman_coach_year)
-        print('\nheisman_coach_year\n', heisman_coach_year)
+        print('\nheisman_coach_year\n', heisman_coach_year)'''
         
         # --- int(rank) by "coach" by int(year) ---
-        rank_school_year = bound_years(tabulate_dictionary(finalPollsJSON, columnDepth=(2, None), indexDepth=0, valueDepth=1))
+        rank_school_year = tabulate(pollsJSON, columnDepth=(2, None), indexDepth=0, valueDepth=1)
         rank_school_year = rank_school_year.apply(to_numeric, errors='coerce').astype('Int64')
         rank_coach_year = bound_years(recolumnate(rank_school_year, school_coach_year))
-        def rankMap(num):
-            if isnan(num):
-                return 30
-            else:
-                return int(num)
         rank_coach_year = rank_coach_year.map(rankMap)
         metrics.append(rank_coach_year)
         print('\nrank_coach_year\n', rank_coach_year)
 
         # --- int(offensiveScore) by coach by year ---
-        recordsDF = bound_years(tabulate_dictionary(recordsJSON, columnDepth=0, indexDepth=1, valueDepth=(2, None)))
+        '''recordsDF = tabulate(recordsJSON, columnDepth=0, indexDepth=1, valueDepth=(2, None))
         records_coach_year = bound_years(recolumnate(recordsDF, school_coach_year))
-        offense = lambda record : [int(game[1].split('-')[0]) for game in record]
-        defense = lambda record : [int(game[1].split('-')[1]) for game in record]
-        def offensiveScoreMap(record):
-            try:
-                return sum(nparr(offense(record), dtype=int))
-            except:
-                return 0
-        offensiveScore_coach_year = records_coach_year.map(offensiveScoreMap)
+        offensiveScore_coach_year = records_coach_year.map(totalOffensiveScoreMap)
         metrics.append(offensiveScore_coach_year)
-        print('\noffensiveScore_coach_year\n', offensiveScore_coach_year)
+        print('\noffensiveScore_coach_year\n', offensiveScore_coach_year)'''
 
         # --- int(defensiveScore) by coach by year ---
-        def defensiveScoreMap(record):
-            try:
-                return sum(nparr(defense(record), dtype=int))
-            except:
-                return 0
-        defensiveScore_coach_year = records_coach_year.map(defensiveScoreMap)
+        defensiveScore_coach_year = records_coach_year.map(totalDefensiveScoreMap)
         metrics.append(defensiveScore_coach_year)
         print('\ndefensiveScore_coach_year\n', defensiveScore_coach_year)
         
         # --- int(winCount) by coach by year ---
-        def winCountMap(record):
-            try:
-                return sum(nparr(
-                    [offense > defense for offense, defense in zip(offense(record), defense(record))]
-                , dtype=int))
-            except:
-                return 0
         wins_coach_year = records_coach_year.map(winCountMap)
         metrics.append(wins_coach_year)
         print('\nwins_coach_year\n', wins_coach_year)
         
         # --- int(lossCount) by coach by year ---
-        def lossCountMap(record):
-            try:
-                return sum(nparr(
-                    [offense < defense for offense, defense in zip(offense(record), defense(record))]
-                , dtype=int))
-            except:
-                return 0
         losses_coach_year = records_coach_year.map(lossCountMap)
         metrics.append(losses_coach_year)
         print('\nlosses_coach_year\n', losses_coach_year)
