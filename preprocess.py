@@ -337,32 +337,44 @@ class Preprocessor:
             changeYears = schools.index[schoolChanges][1:]
 
             for changeYear in changeYears:
-                if (changeYear - self.__backgroundYears < self.__startYear or
-                    changeYear + self.__predictionYears > self.__endYear):
+                newSchool = school_coach_year.at(changeYear, coach)
+                if (newSchool != newSchool or
+                    changeYear - self.backgroundYears < self.startYear or
+                    changeYear + self.predictionYears > self.endYear):
                     continue
 
-                backgroundYears = range(changeYear - self.__backgroundYears, changeYear)
-                predictionYears = range(changeYear, changeYear + self.__predictionYears)
-                backgroundSchools = school_coach_year.loc[backgroundYears, coach]
-                predictionSchools = school_coach_year.loc[predictionYears, coach]
+                backgroundYears = range(changeYear - self.backgroundYears, changeYear)
+                predictionYears = range(changeYear, changeYear + self.predictionYears)
+                backgroundSchools = Series(school_coach_year.loc[backgroundYears, coach])
+                predictionSchools = Series(school_coach_year.loc[predictionYears, coach])
+                padding = self.backgroundYears - self.predictionYears
+                predictionSchoolsPadding = Series([""] * padding, index=[None] * padding)
 
-                newSchool = predictionSchools.iloc[0]
-                if (predictionSchools.nunique() != 1 or not isinstance(newSchool, str) and newSchool != newSchool):
-                    continue
-
-                featureSet = [backgroundSchools.values]
+                featureSet = [
+                    backgroundSchools.values,
+                    predictionSchoolsPadding.append(predictionSchools)                    
+                ]
                 for metric in metrics:
-                    featureSet.append(metric.loc[backgroundYears, coach].values)
-                featureSet = nparr(featureSet).T
-                featureSet = nparr([*featureSet.flatten(), newSchool])
+                    metric = DataFrame(metric)
+                    feature = list(Series(metric.loc[backgroundYears, coach]).values)
+                    if isinstance(feature[0], list):
+                        for subfeature in [list(subfeature) for subfeature in zip(*feature)]:
+                            featureSet.append(subfeature)
+                    else:
+                        featureSet.append(feature)
 
                 labelSet = []
                 for metric in metrics:
-                    labelSet.append(metric.loc[predictionYears, coach].values)
-                labelSet = nparr(labelSet).T
+                    metric = DataFrame(metric)
+                    feature = list(Series(metric.loc[predictionYears, coach]).values)
+                    if isinstance(feature[0], list):
+                        for subfeature in [list(subfeature) for subfeature in zip(*feature)]:
+                            featureSet.append(subfeature)
+                    else:
+                        featureSet.append(feature)
 
-                X.append(featureSet)
-                Y.append(labelSet)
+                X.append(nparr(featureSet).T)
+                Y.append(nparr(labelSet).T)
 
         X = nparr(X)
         Y = nparr(Y)
