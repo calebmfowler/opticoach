@@ -173,7 +173,7 @@ class Preprocessor:
         #     return .5 * BCS_sos(team, year) + .5 * top25_score(team, year)
 
 
-        def record_map(record):
+        def record_map(record, year):
             gameCount = len(record)
             scoringOffense = []
             scoringDefense = []
@@ -194,6 +194,13 @@ class Preprocessor:
             lossRate = lossCount / gameCount
             return [scoringOffense, scoringDefense, winRate, lossRate]
 
+        def annual_record_map(season):
+            year = season.name
+            recordFeaturesDict = {}
+            for coach in season.columns:
+                recordFeaturesDict[coach] = record_map(season[coach], year)
+            return Series(recordFeaturesDict)
+
         # === METRICS COMPILATION ===
         school_coach_year = tabulate(coachJSON, columnDepth=3, indexDepth=0, valueDepth=1)
         add_metric(school_coach_year, name="school_coach_year", map=school_map)
@@ -208,7 +215,7 @@ class Preprocessor:
 
         record_school_year = tabulate(recordsJSON, columnDepth=0, indexDepth=1, valueDepth=(2, None))
         record_coach_year = recolumnate(record_school_year, school_coach_year)
-        recordFeatures_coach_year = record_coach_year.map(record_map)
+        recordFeatures_coach_year = record_coach_year.apply(annual_record_map, axis=1)
         add_metric(recordFeatures_coach_year, name="recordFeatures_coach_year")
 
         # === PACKAGING METRICS ===
