@@ -3,22 +3,28 @@ from copy import deepcopy
 from numpy import array as nparr, nan, isnan
 from pandas import Series, to_numeric, DataFrame, json_normalize, read_json
 from sklearn.model_selection import train_test_split
-from utilities import load_json, save_pkl, serialize_dictionary, tabulate_dictionary, recolumnate
+from utilities import load_json, save_pkl, serialize_dictionary, tabulate_dictionary, recolumnate, bound_df
 
 class Preprocessor:
     '''
     ### class Preprocessor
     This `class` preprocesses the aggregated data into a format suitable for model training.
 
-    ### dict __startYear
-    This private `int` variable stores the first year to be included.
-
-    ### dict __endYear
-    This private `int` variable stores the first year to be disincluded.
-
     ### dict __aggregatedFiles
     This private `dict` variable stores `string` keys of all aggregated files and `string` values of 
     file names as sourced from the Aggregator instance.
+
+    ### int startYear
+    This `int` variable stores the first year to be included.
+
+    ### int endYear
+    This  `int` variable stores the first year to be disincluded.
+
+    ### int backgroundYears
+    Thi `int` variable stores the number of years prior to a move to be considerd.
+
+    ### int predictionYears
+    Thi `int` variable stores the number of years after a move to be considered.
 
     ### dict preprocessedFiles
     This `dict` variable stores `string` keys of all preprocessed files and `string` values of file names.
@@ -27,20 +33,17 @@ class Preprocessor:
     This `void` function is called as the Preprocessor constructor, initializing the variable __aggregatedFiles
     from an Aggregator instance. If provided a Preprocessor, it operates as a copy constructor.
 
-    ### DataFrame __bound(DataFrame df)
-
-
     ### void preprocess()
     This `void` function preprocesses all data, updating the files referenced by preprocessedFiles
     '''
     
-    def __init__(self, arg, startYear=1936, endYear=2024, backgroundYears=10, predictionYears=1):
+    def __init__(self, arg, startYear=1936, endYear=2024, backgroundYears=15, predictionYears=5):
         if type(arg) == Aggregator:
             self.__aggregatedFiles = Aggregator(arg).aggregatedFiles
-            self.__startYear = startYear
-            self.__endYear = endYear
-            self.__backgroundYears = backgroundYears
-            self.__predictionYears = predictionYears
+            self.startYear = startYear
+            self.endYear = endYear
+            self.backgroundYears = backgroundYears
+            self.predictionYears = predictionYears
             self.preprocessedFiles = {}
         elif type(arg) == Preprocessor:
             self.__aggregatedFiles = deepcopy(arg.__aggregatedFiles)
@@ -52,49 +55,24 @@ class Preprocessor:
         else:
             raise Exception("Incorrect arguments for Preprocessor.__init__(self, aggregator)")
         return
-    
-    def bound(self, df):
-        '''
-        Restrict a DataFrame to a specified range of integer index values.
-        Also, sort by string casted columns and integer casted indices.
-
-        Parameters:
-        -----------
-        df : pandas.DataFrame
-            The DataFrame whose index will be filtered and sorted.
-        
-        start : int
-            The starting index value (inclusive) of the desired range.
-        
-        end : int
-            The ending index value (inclusive) of the desired range.
-
-        Returns:
-        --------
-        pandas.DataFrame
-            A new DataFrame containing only the rows within the specified index range, sorted by index.
-
-        Notes:
-        ------
-        - Converts the index to integers before filtering.
-        - Sorts the DataFrame by its index prior to slicing.
-        '''
-
-        df.index = df.index.astype(int)
-        df.columns = df.columns.astype(str)
-        df = df.sort_index().loc[self.__startYear:self.__endYear]
-        df = df[sorted(df.columns)]
-        return df
 
     def preprocess(self):
+        # === UTILITIES ===
+        bound_years = lambda df : bound_df(df, self.startYear, self.endYear)
+
+        # === FILE IMPORTS ===
+        coachJSON = load_json('files/trimmed_coach_dictionary.json')
+        schoolJSON = load_json('files/mapping_schools.json')
+        heismanJSON = load_json('files/heismans.json')
+        pollsJSON = load_json('files/final_polls.json')
+        recordsJSON = load_json('files/records.json')
+
         # === COMPILING METRICS ===
         # --- "school" by "coach" by int(year) ---
-        coachJSON = load_json('files/trimmed_coach_dictionary.json')
-        school_coach_year = self.bound(tabulate_dictionary(coachJSON, columnDepth=3, indexDepth=0, valueDepth=1))
-        schoolMapJSON = load_json('files/mapping_schools.json')
+        school_coach_year = bound_years(tabulate_dictionary(coachJSON, columnDepth=3, indexDepth=0, valueDepth=1))
         def schoolMap(school):
-            if school in schoolMapJSON:
-                return schoolMapJSON[school]
+            if school in schoolJSON:
+                return schoolJSON[school]
             elif isnan(school):
                 return ""
             else:
@@ -103,7 +81,7 @@ class Preprocessor:
         print('\nschool_coach_year\n', school_coach_year)
         
         # --- "role" by "coach" by int(year) ---
-        role_coach_year = self.bound(tabulate_dictionary(coachJSON, columnDepth=3, indexDepth=0, valueDepth=2))
+        role_coach_year = bound_years(tabulate_dictionary(coachJSON, columnDepth=3, indexDepth=0, valueDepth=2))
         def roleMap(role):
             if role != role:
                 return ""
@@ -117,19 +95,17 @@ class Preprocessor:
         print('\nrole_coach_year\n', role_coach_year)
 
         # --- int(heisman) by "coach" by int(year) ---
-        heismanJSON = load_json('files/heismans.json')
-        heismanSchool_year = self.bound(serialize_dictionary(heismanJSON, indexDepth=0, valueDepth=2))
+        heismanSchool_year = bound_years(serialize_dictionary(heismanJSON, indexDepth=0, valueDepth=2))
         heismanSchool_year = heismanSchool_year.map(schoolMap)
         heismanSchool_year = heismanSchool_year.reindex(school_coach_year.index)
-        heisman_coach_year = self.bound(school_coach_year.eq(heismanSchool_year, axis=0)).astype(int)
+        heisman_coach_year = bound_years(school_coach_year.eq(heismanSchool_year, axis=0)).astype(int)
         metrics.append(heisman_coach_year)
         print('\nheisman_coach_year\n', heisman_coach_year)
         
         # --- int(rank) by "coach" by int(year) ---
-        finalPollsJSON = load_json('files/final_polls.json')
-        rank_school_year = self.bound(tabulate_dictionary(finalPollsJSON, columnDepth=(2, None), indexDepth=0, valueDepth=1))
+        rank_school_year = bound_years(tabulate_dictionary(finalPollsJSON, columnDepth=(2, None), indexDepth=0, valueDepth=1))
         rank_school_year = rank_school_year.apply(to_numeric, errors='coerce').astype('Int64')
-        rank_coach_year = self.bound(recolumnate(rank_school_year, school_coach_year))
+        rank_coach_year = bound_years(recolumnate(rank_school_year, school_coach_year))
         def rankMap(num):
             if isnan(num):
                 return 30
@@ -140,9 +116,8 @@ class Preprocessor:
         print('\nrank_coach_year\n', rank_coach_year)
 
         # --- int(offensiveScore) by coach by year ---
-        recordsJSON = load_json('files/records.json')
-        recordsDF = self.bound(tabulate_dictionary(recordsJSON, columnDepth=0, indexDepth=1, valueDepth=(2, None)))
-        records_coach_year = self.bound(recolumnate(recordsDF, school_coach_year))
+        recordsDF = bound_years(tabulate_dictionary(recordsJSON, columnDepth=0, indexDepth=1, valueDepth=(2, None)))
+        records_coach_year = bound_years(recolumnate(recordsDF, school_coach_year))
         offense = lambda record : [int(game[1].split('-')[0]) for game in record]
         defense = lambda record : [int(game[1].split('-')[1]) for game in record]
         def offensiveScoreMap(record):

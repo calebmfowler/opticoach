@@ -273,3 +273,36 @@ def recolumnate(data, columnation):
                 recolumnatedData.loc[index, column] = value
     return recolumnatedData
     '''
+
+def bound_df(df, start, end):
+    '''
+    Restrict a DataFrame to a specified range of integer index values.
+    Also, sort by string casted columns and integer casted indices.
+
+    Parameters:
+    -----------
+    df : pandas.DataFrame
+        The DataFrame whose index will be filtered and sorted.
+    
+    start : int
+        The starting index value (inclusive) of the desired range.
+    
+    end : int
+        The ending index value (inclusive) of the desired range.
+
+    Returns:
+    --------
+    pandas.DataFrame
+        A new DataFrame containing only the rows within the specified index range, sorted by index.
+
+    Notes:
+    ------
+    - Converts the index to integers before filtering.
+    - Sorts the DataFrame by its index prior to slicing.
+    '''
+
+    df.index = df.index.astype(int)
+    df.columns = df.columns.astype(str)
+    df = df.sort_index().loc[start:end]
+    df = df[sorted(df.columns)]
+    return df
