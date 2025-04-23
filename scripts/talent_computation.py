@@ -7,6 +7,7 @@ with open('rosters.json', 'r', encoding='utf-8') as file2read:
     
 with open('mapping_schools.json', 'r', encoding='utf-8') as file2read:
     maps = json.load(file2read)
+
     
     
 def position_weight(string):
@@ -95,18 +96,26 @@ def calc_senior(number):
     
 def talent_composite(year, team):
     year = str(year)
+    college_list = list(school_links.keys()) + list(DII_links.keys()) + list(DIII_links.keys()) + list(naia_links.keys()) + list(FCS_links.keys())
     try:
         team = maps[team]
     except:
         team = team
-    roster = roster_dict[year][team]
-    total = 0
-    for player in roster:
-        position = player[1]
-        pick = int(trim_string(player[2]))
-        seniority = calc_senior(int(player[-1])-int(year))
-        value = position_weight(position) * hybrid_function_smooth_slope(pick-1) * seniority
-        total+=value
+    try:
+        no_mascot = no_mascots[team]
+    except:
+        no_mascot = team
+    if no_mascot in college_list:
+        roster = roster_dict[year][team]
+        total = 0
+        for player in roster:
+            position = player[1]
+            pick = int(trim_string(player[2]))
+            seniority = calc_senior(int(player[-1])-int(year))
+            value = position_weight(position) * hybrid_function_smooth_slope(pick-1) * seniority
+            total+=value
+    else:
+        total = 0
     return total
 
 
