@@ -26,5 +26,14 @@ class Aggregator:
         return
 
     def aggregate(self):
-        self.aggregatedFiles['example'] = 'files/tesexample.json'
+        self.aggregatedFiles['rosters'] = 'files/rosters.json' #json of college rosters including draft information
+        self.aggregatedFiles['draft'] = 'files/draft_dict.json'
+        self.aggregatedFiles['records'] = 'files/records.json' #json of pro and college games
+        self.aggregatedFiles['polls'] = 'files/polls.json' #json of the AP Poll by year/week
+        self.aggregatedFiles['nfl_links'] = 'files/nfl_links.json' #json of associated score table links for NFL teams
+        self.aggregatedFiles['cfl_links'] = 'files/cfl_links.json' #json of associated score table links for CFL teams
+        self.aggregatedFiles['ufl_links'] = 'files/ufl_links.json' #json of associated score table links for UFL teams
+        self.aggregatedFiles['arenafl_links'] = 'files/arenafl_links.json' #json of associated score table links for Arena FL teams
+        self.aggregatedFiles['map'] = 'files/mapping_schools.json' #json mapping school name variations to a single school name
+        self.aggregatedFiles['coaches'] = 'files/trimmed_coach_dictionary.json' #json of coach history
         return
