@@ -174,30 +174,15 @@ class Preprocessor:
         record_school_year = tabulate(recordsJSON, columnDepth=0, indexDepth=1, valueDepth=(2, None))
         record_coach_year = recolumnate(record_school_year, school_coach_year)
         recordFeatures_coach_year = record_coach_year.map(record_map)
-
-        offensiveScore_coach_year = record_coach_year.map(scoring_offense_map)
-        metrics.append(offensiveScore_coach_year)
-        print('\noffensiveScore_coach_year\n', offensiveScore_coach_year)
-
-        defensiveScore_coach_year = record_coach_year.map(scoring_defense_map)
-        metrics.append(defensiveScore_coach_year)
-        print('\ndefensiveScore_coach_year\n', defensiveScore_coach_year)
-        
-        wins_coach_year = record_coach_year.map(win_count_map)
-        metrics.append(wins_coach_year)
-        print('\nwins_coach_year\n', wins_coach_year)
-        
-        losses_coach_year = record_coach_year.map(loss_count_map)
-        metrics.append(losses_coach_year)
-        print('\nlosses_coach_year\n', losses_coach_year)
+        add_metric(recordFeatures_coach_year, name="recordFeatures_coach_year")
 
         # === PACKAGING METRICS ===
         X, Y = [], []
         for coach, i in zip(school_coach_year.columns, range(len(school_coach_year.columns))):
             print(f"coach {i} = {coach}")
-            allSchools = school_coach_year[coach]
-            allSchoolChanges = allSchools != allSchools.shift()
-            changeYears = allSchools.index[allSchoolChanges][1:]
+            schools = school_coach_year[coach]
+            schoolChanges = schools != schools.shift()
+            changeYears = schools.index[schoolChanges][1:]
 
             for changeYear in changeYears:
                 if (changeYear - self.__backgroundYears < self.__startYear or
