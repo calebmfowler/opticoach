@@ -1,10 +1,7 @@
 from collections import defaultdict
-from collections.abc import Iterable
-from numpy import isnan
 from pandas import DataFrame, Series
 import pickle as pkl
 import json
-
 
 def save_pkl(data, filename='MISSING_FILENAME.pkl'):
     """
@@ -27,7 +24,6 @@ def save_pkl(data, filename='MISSING_FILENAME.pkl'):
     pkl.dump(data, file)
     file.close()
     print(f"\nData saved to {filename}\n")
-
 
 def load_pkl(filename='MISSING_FILENAME.pkl'):
     """
@@ -54,7 +50,6 @@ def load_pkl(filename='MISSING_FILENAME.pkl'):
     print(f"\nData loaded from {filename}\n")
     return data
 
-
 def save_json(data, filename='MISSING_FILENAME.json'):
     """
     Save data to a JSON file.
@@ -76,7 +71,6 @@ def save_json(data, filename='MISSING_FILENAME.json'):
     json.dump(data, file)
     file.close()
     print(f"\nData saved to {filename}\n")
-
 
 def load_json(filename='MISSING_FILENAME.json'):
     """
@@ -103,8 +97,7 @@ def load_json(filename='MISSING_FILENAME.json'):
     print(f"\nData loaded from {filename}\n")
     return data
 
-
-def traverse_dictionary(data, path=[]):
+def traverse_dict(data, path=[]):
     """
     Recursively traverse a nested dictionary and yield paths to each terminal value.
 
@@ -129,14 +122,13 @@ def traverse_dictionary(data, path=[]):
 
     for key, value in dict(data).items():
         if isinstance(value, dict):
-            yield from traverse_dictionary(value, path + [key])
+            yield from traverse_dict(value, path + [key])
         elif isinstance(value, list):
             yield path + [key] + value
         else:
             yield path + [key, value]
 
-
-def tabulate_dictionary(data, columnDepth, indexDepth, valueDepth):
+def tabulate_dict(data, columnDepth, indexDepth, valueDepth):
     """
     Converts a nested dictionary into a tabular format using specified depths for columns, 
     indices, and values.
@@ -160,35 +152,42 @@ def tabulate_dictionary(data, columnDepth, indexDepth, valueDepth):
     """
     
     collectedData = []
-    for element in traverse_dictionary(data):
-        if isinstance(indexDepth, list):
+    for element in traverse_dict(data):
+        if isinstance(indexDepth, int):
+            index = element[indexDepth]
+        elif isinstance(indexDepth, list):
             index = ', '.join([element[i] for i in indexDepth])
         else:
-            index = element[indexDepth]
-        if isinstance(valueDepth, list):
-            value = ', '.join([element[i] for i in valueDepth])
+            raise Exception("Improper indexDepth for tabulate_dict")
+        
+        if isinstance(valueDepth, int):
+            value = element[valueDepth]
         elif isinstance(valueDepth, tuple):
             a, b = valueDepth
             value = element[a:b]
+        elif isinstance(valueDepth, list):
+            value = [element[i] for i in valueDepth]
         else:
-            value = element[valueDepth]
-        if isinstance(columnDepth, list):
-            columnList = [element[i] for i in columnDepth]
+            raise Exception("Improper valueDepth for tabulate_dict")
+        
+        if isinstance(columnDepth, int):
+            columnList = [element[columnDepth]]
         elif isinstance(columnDepth, tuple):
             a, b = columnDepth
             columnList = element[a:b]
+        elif isinstance(columnDepth, list):
+            columnList = [element[i] for i in columnDepth]
         else:
-            columnList = [element[columnDepth]]
+            raise Exception("Improper columnDepth for tabulate_dict")
+        
         for column in columnList:
             collectedData.append((index, column, value))
-    collectedDictionary = defaultdict(dict)
-    for index, column, value in collectedData:
-        collectedDictionary[index][column] = value
-    tabulatedData = DataFrame.from_dict(collectedDictionary, orient='index')
+    
+    collectedData = DataFrame(collectedData, columns=['index', 'column', 'value'])
+    tabulatedData = collectedData.pivot(index='index', columns='column', values='value')
     return tabulatedData
 
-
-def serialize_dictionary(data, indexDepth, valueDepth):
+def serialize_dict(data, indexDepth, valueDepth):
     """
     Traverse and flatten a nested dictionary into a structured pandas DataFrame.
 
@@ -220,31 +219,45 @@ def serialize_dictionary(data, indexDepth, valueDepth):
     - The resulting DataFrame has one row per unique index and one or more columns of extracted values.
     """
 
-    collectedData = []
-    for element in traverse_dictionary(data):
-        if isinstance(indexDepth, list):
+    collectedIndices, collectedValues = [], []
+    for element in traverse_dict(data):
+        if isinstance(indexDepth, int):
+            index = element[indexDepth]
+        elif isinstance(indexDepth, list):
             index = ', '.join([element[i] for i in indexDepth])
         else:
-            index = element[indexDepth]
-        if isinstance(valueDepth, list):
-            value = ', '.join([element[i] for i in valueDepth])
+            raise Exception("Improper indexDepth for serialize_dict")
+        
+        if isinstance(valueDepth, int):
+            value = element[valueDepth]
         elif isinstance(valueDepth, tuple):
             a, b = valueDepth
-            if b == None:
-                value = element[a:]
-            else:
-                value = element[a:b]
+            value = element[a:b]
+        elif isinstance(valueDepth, list):
+            value = [element[i] for i in valueDepth]
         else:
-            value = element[valueDepth]
-        collectedData.append((index, value))
-    collectedDictionary = defaultdict(dict)
-    for index, value in collectedData:
-        collectedDictionary[index] = value
-    serializedData = DataFrame.from_dict(collectedDictionary, orient='index')
+            raise Exception("Improper valueDepth for tabulate_dict")
+        
+        collectedIndices.append(index)
+        collectedValues.append(value)
+    
+    serializedData = Series(collectedValues, index=collectedIndices)
     return serializedData
 
-
-def recolumnate(data, columnation):
+def recolumnate_df(data, columnation):
+    '''
+    # The below is chat's vectorization of this function
+    
+    recolumnatedData = columnation.copy()
+    for index in recolumnatedData.index:
+        for column in recolumnatedData.columns:
+            oldColumn = columnation.loc[index, column]
+            if not isinstance(oldColumn, str) and not isnan(oldColumn):
+                value = data.loc[index, oldColumn]
+                recolumnatedData.loc[index, column] = value
+    return recolumnatedData
+    '''
+    data, columnation = DataFrame(data), DataFrame(columnation)
     long = columnation.stack().rename("old_column").reset_index()
     long.columns = ["index", "column", "old_column"]
     long = long[long["old_column"].apply(lambda x: isinstance(x, str))]
@@ -261,20 +274,7 @@ def recolumnate(data, columnation):
 
     return recolumnated
 
-    '''
-    # The above is chat's vectorization of the below function
-    
-    recolumnatedData = columnation.copy()
-    for index in recolumnatedData.index:
-        for column in recolumnatedData.columns:
-            oldColumn = columnation.loc[index, column]
-            if not isinstance(oldColumn, str) and not isnan(oldColumn):
-                value = data.loc[index, oldColumn]
-                recolumnatedData.loc[index, column] = value
-    return recolumnatedData
-    '''
-
-def bound_df(df, start, end):
+def bound_data(data, start, end):
     '''
     Restrict a DataFrame to a specified range of integer index values.
     Also, sort by string casted columns and integer casted indices.
@@ -300,9 +300,16 @@ def bound_df(df, start, end):
     - Converts the index to integers before filtering.
     - Sorts the DataFrame by its index prior to slicing.
     '''
+    if isinstance(data, DataFrame):
+        data.index = data.index.astype(int)
+        data.columns = data.columns.astype(str)
+        data = data.sort_index().loc[start:end]
+        data = data[sorted(data.columns)]
+        return data
+    elif isinstance(data, Series):
+        data.index = data.index.astype(int)
+        data = data.sort_index().loc[start:end]
+        return data
+    else:
+        raise Exception("improper data provided to bound_data")
 
-    df.index = df.index.astype(int)
-    df.columns = df.columns.astype(str)
-    df = df.sort_index().loc[start:end]
-    df = df[sorted(df.columns)]
-    return df

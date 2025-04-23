@@ -1,9 +1,9 @@
 from aggregate import Aggregator
 from copy import deepcopy
-from numpy import array as nparr, nan, isnan
-from pandas import Series, to_numeric, DataFrame, json_normalize, read_json
+from numpy import array as nparr
+from pandas import DataFrame, Series, to_numeric
 from sklearn.model_selection import train_test_split
-from utilities import load_json, save_pkl, serialize_dictionary, tabulate_dictionary, recolumnate, bound_df
+from utilities import bound_data, load_json, recolumnate_df, save_pkl, serialize_dict, tabulate_dict
 
 class Preprocessor:
     '''
@@ -58,9 +58,10 @@ class Preprocessor:
 
     def preprocess(self):
         # === UTILITIES ===
-        bound_years = lambda df : bound_df(df, self.startYear, self.endYear)
-        tabulate = lambda *args, **kwargs : DataFrame(bound_years(tabulate_dictionary(*args, **kwargs)))
-        serialize = lambda *args, **kwargs : Series(serialize(*args, **kwargs))
+        bound_years = lambda df : bound_data(df, self.startYear, self.endYear)
+        tabulate = lambda *args, **kwargs : DataFrame(bound_years(tabulate_dict(*args, **kwargs)))
+        serialize = lambda *args, **kwargs : Series(bound_years(serialize_dict(*args, **kwargs)))
+        recolumnate = lambda *args, **kwargs : DataFrame(bound_years(recolumnate_df(*args, **kwargs)))
 
         # === FILE IMPORTS ===
         coachJSON = load_json('files/trimmed_coach_dictionary.json')
@@ -137,18 +138,18 @@ class Preprocessor:
         metrics = []
         
         # --- "role" by "coach" by int(year) ---
-        '''role_coach_year = tabulate(coachJSON, columnDepth=3, indexDepth=0, valueDepth=2)
+        role_coach_year = tabulate(coachJSON, columnDepth=3, indexDepth=0, valueDepth=2)
         role_coach_year = role_coach_year.map(roleMap)
         metrics.append(role_coach_year)
-        print('\nrole_coach_year\n', role_coach_year)'''
+        print('\nrole_coach_year\n', role_coach_year)
 
         # --- int(heisman) by "coach" by int(year) ---
-        '''heismanSchool_year = serialize(heismanJSON, indexDepth=0, valueDepth=2)
+        heismanSchool_year = serialize(heismanJSON, indexDepth=0, valueDepth=2)
         heismanSchool_year = heismanSchool_year.map(schoolMap)
         heismanSchool_year = heismanSchool_year.reindex(school_coach_year.index)
         heisman_coach_year = bound_years(school_coach_year.eq(heismanSchool_year, axis=0)).astype(int)
         metrics.append(heisman_coach_year)
-        print('\nheisman_coach_year\n', heisman_coach_year)'''
+        print('\nheisman_coach_year\n', heisman_coach_year)
         
         # --- int(rank) by "coach" by int(year) ---
         rank_school_year = tabulate(pollsJSON, columnDepth=(2, None), indexDepth=0, valueDepth=1)
@@ -159,11 +160,11 @@ class Preprocessor:
         print('\nrank_coach_year\n', rank_coach_year)
 
         # --- int(offensiveScore) by coach by year ---
-        '''recordsDF = tabulate(recordsJSON, columnDepth=0, indexDepth=1, valueDepth=(2, None))
+        recordsDF = tabulate(recordsJSON, columnDepth=0, indexDepth=1, valueDepth=(2, None))
         records_coach_year = bound_years(recolumnate(recordsDF, school_coach_year))
         offensiveScore_coach_year = records_coach_year.map(totalOffensiveScoreMap)
         metrics.append(offensiveScore_coach_year)
-        print('\noffensiveScore_coach_year\n', offensiveScore_coach_year)'''
+        print('\noffensiveScore_coach_year\n', offensiveScore_coach_year)
 
         # --- int(defensiveScore) by coach by year ---
         defensiveScore_coach_year = records_coach_year.map(totalDefensiveScoreMap)
@@ -199,7 +200,7 @@ class Preprocessor:
                 predictionSchools = school_coach_year.loc[predictionYears, coach]
 
                 newSchool = predictionSchools.iloc[0]
-                if (predictionSchools.nunique() != 1 or not isinstance(newSchool, str) and isnan(newSchool)):
+                if (predictionSchools.nunique() != 1 or not isinstance(newSchool, str) and newSchool != newSchool):
                     continue
 
                 featureSet = [backgroundSchools.values]
