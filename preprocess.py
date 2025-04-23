@@ -190,14 +190,19 @@ class Preprocessor:
             scoringOffense = sum(nparr(scoringOffense)) / gameCount
             scoringDefense = sum(nparr(scoringDefense)) / gameCount
             winRate = winCount / gameCount
-            BCS_strength = BCS_sos(team, year)
-            return [scoringOffense, scoringDefense, winRate, BCS_strength]
+            school = school_coach_year.at(year, coach)
+            try:
+                school = schoolMapJSON[school]
+            except:
+                school = school
+            BCS_strength = BCS_sos(school, year)
+            return [scoringOffense, scoringDefense, winRate, BCS_strength, talent_level]
 
         def annual_record_map(season):
             year = season.name
             recordFeaturesDict = {}
             for coach in season.columns:
-                recordFeaturesDict[coach] = record_map(season[coach], year)
+                recordFeaturesDict[coach] = record_map(season[coach], year, coach)
             return Series(recordFeaturesDict)
 
         # === METRICS COMPILATION ===
