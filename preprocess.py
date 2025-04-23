@@ -301,6 +301,7 @@ class Preprocessor:
             except:
                 school = school
             BCS_strength = BCS_sos(school, year)
+            talent_level = talent_composite(year, school)
             return [scoringOffense, scoringDefense, winRate, BCS_strength, talent_level]
 
         def annual_record_map(season):
