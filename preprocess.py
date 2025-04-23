@@ -178,7 +178,6 @@ class Preprocessor:
             scoringOffense = []
             scoringDefense = []
             winCount = 0.
-            lossCount = 0.
             for game in record:
                 score = game[1].split('-')
                 offense, defense = int(score[0]), int(score[1])
@@ -186,13 +185,12 @@ class Preprocessor:
                 scoringDefense.append(defense)
                 if offense > defense:
                     winCount += 1
-                elif offense < defense:
-                    lossCount += 1
+                elif offense == defense:
+                    winCount += .5
             scoringOffense = sum(nparr(scoringOffense)) / gameCount
             scoringDefense = sum(nparr(scoringDefense)) / gameCount
             winRate = winCount / gameCount
-            lossRate = lossCount / gameCount
-            return [scoringOffense, scoringDefense, winRate, lossRate]
+            return [scoringOffense, scoringDefense, winRate]
 
         def annual_record_map(season):
             year = season.name
