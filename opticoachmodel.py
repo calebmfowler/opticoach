@@ -1,7 +1,7 @@
 from copy import deepcopy
 from keras.src import Model
 from keras.src.callbacks import ReduceLROnPlateau
-from keras.src.layers import Masking, LSTM, Dense
+from keras.src.layers import Input, Masking, LSTM, Dense
 from keras.src.optimizers import Adam
 import numpy as np
 from preprocess import Preprocessor
@@ -59,18 +59,13 @@ class OpticoachModel:
         https://chatgpt.com/share/67f4a398-42f8-8012-9c56-9538846a97b0
         '''
 
-        timeStepCount = 75
-        metricCount = 30
-
         # We first accept an input batch of coaches. For each coach, a time-ordered sequence of
         # coaching metrics will be provided. In order to accomodate gaps in the data, a
         # masking is used to cover missing time steps and missing metrics. There will be gaps in the
         # time sequence in which a coach was not a head coach, and gaps in the metrics if data is
         # not available.
-        maskedInput = Masking(
-            mask_value=0.0,
-            input=(timeStepCount, metricCount)
-        )
+        input = Input((15, 8))
+        mask = Masking(mask_value=0.0)(input)
         
         # In order to handle long-term dependencies we will utilize a Long Short Term-Memory (LSTM)
         # layer. Dropout and regularization are also supplemented in order to avoid overfitting.
@@ -80,7 +75,7 @@ class OpticoachModel:
             dropout=0.2,
             recurrent_dropout=0.2,
             kernel_regularizer='l2'
-        )(maskedInput)
+        )(mask)
         
         # In order to interpret the LSTM output, a Dense layer is added. Dropout is ommited
         # following this layer because that adds imprecision to regression tasks.
@@ -92,12 +87,12 @@ class OpticoachModel:
         
         # Finally, a few key coaching success metrics are trained on and predicted. For the
         # purpose of precise regression, linear activation is used.
-        denseOutput = Dense(
-            metricCount,
+        output = Dense(
+            8,
             activation='linear'
         )(hidden)
 
-        model = Model(inputs=maskedInput, outputs=denseOutput)
+        model = Model(inputs=input, outputs=output)
         save_pkl(model, 'files/model.pkl')
         self.modelFiles['model'] = 'files/model.pkl'
 
@@ -109,9 +104,13 @@ class OpticoachModel:
         xScaler, yScaler = MinMaxScaler(), MinMaxScaler()
 
         tX = load_pkl(self.__preprocessedFiles['trainX'])
+        print(tX)
         tY = load_pkl(self.__preprocessedFiles['trainY'])
+        print(tY)
         vX = load_pkl(self.__preprocessedFiles['validX'])
+        print(vX)
         vY = load_pkl(self.__preprocessedFiles['validY'])
+        print(vY)
 
         tXs = xScaler.fit_transform(tX)
         vXs = xScaler.transform(vX)

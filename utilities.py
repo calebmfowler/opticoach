@@ -1,5 +1,6 @@
 from collections import defaultdict
 from collections.abc import Iterable
+from numpy import isnan
 from pandas import DataFrame, Series
 import pickle as pkl
 import json
@@ -25,7 +26,7 @@ def save_pkl(data, filename='MISSING_FILENAME.pkl'):
     file = open(filename, 'wb')
     pkl.dump(data, file)
     file.close()
-    print(f"Data saved to {filename}")
+    print(f"\nData saved to {filename}\n")
 
 
 def load_pkl(filename='MISSING_FILENAME.pkl'):
@@ -50,7 +51,7 @@ def load_pkl(filename='MISSING_FILENAME.pkl'):
     file = open(filename, 'rb')
     data = pkl.load(file)
     file.close()
-    print(f"Data loaded from {filename}")
+    print(f"\nData loaded from {filename}\n")
     return data
 
 
@@ -74,7 +75,7 @@ def save_json(data, filename='MISSING_FILENAME.json'):
     file = open(filename, 'wb')
     json.dump(data, file)
     file.close()
-    print(f"Data saved to {filename}")
+    print(f"\nData saved to {filename}\n")
 
 
 def load_json(filename='MISSING_FILENAME.json'):
@@ -99,7 +100,7 @@ def load_json(filename='MISSING_FILENAME.json'):
     file = open(filename, 'rb')
     data = json.load(file)
     file.close()
-    print(f"Data loaded from {filename}")
+    print(f"\nData loaded from {filename}\n")
     return data
 
 
@@ -243,9 +244,40 @@ def serialize_dictionary(data, indexDepth, valueDepth):
     return serializedData
 
 
-def bound(df, start, end):
-    """
-    Restrict a DataFrame to a specified range of integer-based index values.
+def recolumnate(data, columnation):
+    long = columnation.stack().rename("old_column").reset_index()
+    long.columns = ["index", "column", "old_column"]
+    long = long[long["old_column"].apply(lambda x: isinstance(x, str))]
+
+    data_long = data.stack().rename("value").reset_index()
+    data_long.columns = ["index", "old_column", "value"]
+    
+    merged = long.merge(data_long, on=["index", "old_column"], how="left")
+
+    recolumnated = merged.pivot(index="index", columns="column", values="value")
+    
+    recolumnated.index.name = columnation.index.name
+    recolumnated.columns.name = None
+
+    return recolumnated
+
+    '''
+    # The above is chat's vectorization of the below function
+    
+    recolumnatedData = columnation.copy()
+    for index in recolumnatedData.index:
+        for column in recolumnatedData.columns:
+            oldColumn = columnation.loc[index, column]
+            if not isinstance(oldColumn, str) and not isnan(oldColumn):
+                value = data.loc[index, oldColumn]
+                recolumnatedData.loc[index, column] = value
+    return recolumnatedData
+    '''
+
+def bound_df(df, start, end):
+    '''
+    Restrict a DataFrame to a specified range of integer index values.
+    Also, sort by string casted columns and integer casted indices.
 
     Parameters:
     -----------
@@ -267,8 +299,10 @@ def bound(df, start, end):
     ------
     - Converts the index to integers before filtering.
     - Sorts the DataFrame by its index prior to slicing.
-    """
+    '''
 
     df.index = df.index.astype(int)
+    df.columns = df.columns.astype(str)
     df = df.sort_index().loc[start:end]
+    df = df[sorted(df.columns)]
     return df
