@@ -184,7 +184,7 @@ def tabulate_dict(data, columnDepth, indexDepth, valueDepth):
             collectedData.append((index, column, value))
     
     collectedData = DataFrame(collectedData, columns=['index', 'column', 'value'])
-    tabulatedData = collectedData.pivot(index='index', columns='column', values='value')
+    tabulatedData = collectedData.pivot_table(index='index', columns='column', values='value', aggfunc='first')
     return tabulatedData
 
 def serialize_dict(data, indexDepth, valueDepth):
