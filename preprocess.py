@@ -346,14 +346,14 @@ class Preprocessor:
         record_coach_year = recolumnate(record_school_year, school_coach_year)
         # BCS_sos = get_sos_utilities()
         record_coach_year = record_coach_year.apply(annual_record_map, axis=1)
-        '''add_metric(
+        add_metric(
             record_coach_year,
-            recordFeatureTypes,
-            recordBackgroundInclusions,
-            recordForesightInclusions,
-            recordPredictionInclusions,
+            [float, float, float],
+            [True, True, True],
+            [False, False, False],
+            [False, False, True],
             name="record_coach_year"
-        )'''
+        )
 
         # === PACKAGING METRICS ===
         # --- Listing feature and label types ---
@@ -368,7 +368,7 @@ class Preprocessor:
 
         # --- Compiling features and labels ---
         X, Y = [], []
-        for coach, i in zip(school_coach_year.columns, range(len(school_coach_year.columns))):
+        for i, coach in enumerate(school_coach_year.columns):
 
             schools = school_coach_year[coach]
             schoolChanges = schools != schools.shift()
