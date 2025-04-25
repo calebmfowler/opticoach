@@ -196,21 +196,23 @@ class Preprocessor:
                 return .5 * BCS_sos(team, year) + .5 * top25_score(team, year)'''
 
             def position_weight(string):
-                if string == 'QB':
+                '''this function computes the weight of a position based on its importance in football.'''
+                if string == 'QB': #QB tier
                     weight = 3
-                elif string in ['RB', 'FB', 'HB']:
+                elif string in ['RB', 'FB', 'HB']: #RB tier
                     weight = 2.5
-                elif string in ['TE', 'WR', 'DE', 'EDGE', 'CB', 'S']:
+                elif string in ['TE', 'WR', 'DE', 'EDGE', 'CB', 'S', 'DT']: #WR/TE tier, DE/CB tier
                     weight = 2
-                elif string in ['LB', 'DB', 'ILB', 'OLB']:
+                elif string in ['LB', 'DB', 'ILB', 'OLB']: #LB tier
                     weight = 1.5
-                elif string in ['OG', 'OL', 'C', 'OT', 'DL', 'DT', 'NT']:
+                elif string in ['OG', 'OL', 'C', 'OT', 'DL', 'DT', 'NT']: #OL/DL tier
                     weight = 1
-                else:
+                else: #other positions
                     weight = 1
                 return weight
 
             def trim_string(s):
+                '''this function trims a string to only include the first number in the string.'''
                 new_str = ''
                 for i in s:
                     if i.isnumeric() == True:
@@ -220,7 +222,7 @@ class Preprocessor:
                 return new_str
 
             def smooth_blend(x, x0, width):
-                """Smooth transition function centered at x0 with given width."""
+                """Smooth transition function centered at x0 with given width. Precursor to hybrid function below."""
                 return 1 / (1 + np.exp(-(x - x0) / width))
 
             def hybrid_function_smooth_slope(x,
@@ -235,6 +237,8 @@ class Preprocessor:
                                             sigmoid_start=64,
                                             sigmoid_end=192,
                                             blend_width=5):
+                '''mildly arbitrary function for computing talent level of a player based on their draft pick number. 
+                It is a hybrid of an exponential decay, a light decreasing function, and a sigmoid decline.'''
                 # Region 1: exponential decay from 1 to plateau_start
                 exp_part = 1 - exp_drop * (1 - np.exp(-exp_decay_rate * x))
 
@@ -262,6 +266,7 @@ class Preprocessor:
                 return y
 
             def calc_senior(number):
+                '''this function calculates the seniority weight of a player based on their draft year and current year.'''
                 if number == 1:
                     weight = 1
                 elif number == 2:
@@ -269,31 +274,70 @@ class Preprocessor:
                 elif number >= 3:
                     weight = .5
                 return weight
+
+            def talent_composite(year, team):
+                '''this function computes the talent level of a team in a given year. It is computed by incorporating position, pick number, and seniority of the players.'''
+                year = str(year)
+                try: #convert team to standard name if possible
+                    team = maps[team]
+                except:
+                    team = team
+                try: #if the team is in the dictionary, compute the talent level
+                    roster = roster_dict[year][team] #pull the roster for the year/team
+                    total = 0
+                    for player in roster: #sum the talent levels of the players
+                        position = player[1]
+                        pick = int(trim_string(player[2]))
+                        seniority = calc_senior(int(player[-1])-int(year))
+                        value = position_weight(position) * hybrid_function_smooth_slope(pick-1) * seniority
+                        total+=value
+                except: #otherwise, return 0
+                    total = 0
+                return total #return the talent level for the year/school
             
-<<<<<<< HEAD
-  
-            
-        def talent_composite(year, team):
-            year = str(year)
-            college_list = list(school_links.keys()) + list(DII_links.keys()) + list(DIII_links.keys()) + list(naia_links.keys()) + list(FCS_links.keys())
-            try:
-                team = maps[team]
-            except:
-                team = team
-            try:
-                no_mascot = mascotsJSON[team]
-            except:
-                no_mascot = team
-            if no_mascot in college_list:
-                roster = rostersJSON[year][team]
-                total = 0
-                for player in roster:
-                    position = player[1]
-                    pick = int(trim_string(player[2]))
-                    seniority = calc_senior(int(player[-1])-int(year))
-                    value = position_weight(position) * hybrid_function_smooth_slope(pick-1) * seniority
-                    total+=value
-=======
+            def max_talent(team, year):
+                '''this function computes the maximum talent level in a given year. It depends on whether the team is D1, pro, or some
+                other college division.'''
+                try: #convert team to standard name if possible
+                    team = maps[team]
+                except:
+                    team = team
+                if team in D1: #if the team is D1, we need to find the maximum talent level in D1
+                    talent_composite_dict = []
+                    for i in D1:
+                        team = maps[i]
+                        talent_composite_dict.append(talent_composite(year, team))
+                    max_talent = max(talent_composite_dict)
+                elif team in pro: #parity in the NFL means max talent = min talent = .5
+                    max_talent = .5
+                else: #other college divisions
+                    talent_composite_dict = []
+                    for i in other_schools: #iterate through other schools
+                        team = maps[i]
+                        talent_composite_dict.append(talent_composite(year, team))
+                    max_talent = max(talent_composite_dict)
+                return max_talent #return the maximum talent level for the year/school
+
+            def total_talent(team, year):
+                '''this function returns a number between 0 and 1 that represents the talent level of a team. It is computed by dividing
+                the team talent level by the maximum talent level in a given year.'''
+                try:
+                    max_talent_value = max_talent(team, year) #compute associated max talent level
+                    talent = talent_composite(year, team) #compute team talent level
+                    return talent/max_talent_value #return the ratio of team talent to max talent
+                except:
+                    return .5 #if the team is not in the dictionary, return .5 (average talent level)
+
+            def success_level(year, team):
+                '''this function computes the success level of a team in a given year. It is regularized by talent level 
+                and strength of schedule.'''
+                SOS = .5
+                adjusted_talent = total_talent(team, year)
+                final_ranking = 26-5
+                win_loss = .8
+                score = (.5 * win_loss + .5 * final_ranking) * SOS/(2*adjusted_talent)
+                return score
+
             '''def talent_composite(year, team):
                 year = str(year)
                 college_list = list(school_links.keys()) + list(DII_links.keys()) + list(DIII_links.keys()) + list(naia_links.keys()) + list(FCS_links.keys())
@@ -323,7 +367,6 @@ class Preprocessor:
         def record_map(record, year, coach):
             if record != record:
                 return []
->>>>>>> a294191a3281077cdb84feba090c27adafe9ed79
             else:
                 print("record\n", record)
                 gameCount = len(record)
@@ -345,6 +388,7 @@ class Preprocessor:
                 scoringDefense = sum(nparr(scoringDefense)) / gameCount
                 winRate = winCount / gameCount
                 school = school_coach_year.at(year, coach)
+
                 # BCS_strength = BCS_sos(school, year)
                 # talent_level = talent_composite(year, school)
                 # return [scoringOffense, scoringDefense, winRate, BCS_strength, talent_level]
