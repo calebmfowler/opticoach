@@ -132,6 +132,32 @@ class Preprocessor:
                 return 30
             else:
                 return int(num)
+            
+        def ranking_score(team, year):
+            '''this function computes the ranking score for a given team in a given year, as computed by the final AP poll.'''
+            year = str(year)
+            try:
+                team = maps[team] #convert team to standard name if possible
+            except:
+                team = team
+            try:
+                season = pollsJSON[year]['Final'] #pull the final season poll data for the year
+                teams = list(season.values()) #pull the teams from the season data
+                rankings = list(season.keys()) #pull the rankings from the season data
+                for i in teams:
+                    if type(i) == list:
+                        for j in i:
+                            if j == team:
+                                return (26 - int(rankings[teams.index(i)]))/25
+                    else:
+                        if i == team:
+                            return (26 - int(rankings[teams.index(i)]))/25
+                return 0 #if the team is not in the dictionary, return 0 (not ranked)
+            except: #if the year is not in the poll dictionary (some unknown error), return 0
+                return 0
+                
+
+
 
         def get_sos_utilities():
             '''this function contains all the functions needed to compute the strength of schedule for a given team in a given year.'''
@@ -352,14 +378,41 @@ class Preprocessor:
                 except:
                     return .5 #if the team is not in the dictionary, return .5 (average talent level)
 
+        def win_percentage(team, year):
+            '''this function computes the win percentage of a team in a given year.'''
+            year = str(year)
+            try: #convert team to standard name if possible
+                team = maps[team]
+            except:
+                team = team
+            try:
+                season = recordsJSON[team][year] #pull the season data for the year/team
+                wins = 0
+                games = len(season)
+                for game in season:
+                    score = game[1]
+                    home_score = int(score.split('-')[0])
+                    away_score = int(score.split('-')[1])
+                    if home_score > away_score:
+                        wins += 1
+                    elif home_score == away_score:
+                        wins += .5
+                return wins/games #return the win percentage for the year/school
+            except: #print error if the team is not in the dictionary
+                print('Error: win_percentage. Team not found in recordsJSON.')
+
         def success_level(year, team):
             '''this function computes the success level of a team in a given year. It is regularized by talent level 
             and strength of schedule.'''
             SOS = BCS_sos(team, year) #compute strength of schedule
-            adjusted_talent = total_talent(team, year)
-            final_ranking = 26-5
-            win_loss = .8
-            score = (.5 * win_loss + .5 * final_ranking) * SOS/(2*adjusted_talent)
+            adjusted_talent = total_talent(team, year) #compute relative talent level
+            rank_score = ranking_score(team, year) #compute final ranking score
+            win_loss = win_percentage(team, year) #compute win percentage
+            if rank_score == 0:
+                success = win_loss
+            else:
+                success = .8 * win_loss + .2 * rank_score #compute success level
+            score = success * SOS/(2*adjusted_talent) #regularize success level by talent and SOS
             return score
 
             '''def talent_composite(year, team):
