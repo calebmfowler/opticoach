@@ -58,7 +58,7 @@ class Preprocessor:
         return
 
     def preprocess(self):
-        metrics = []
+        metrics, metricTypes, backgroundMask, foresightMask, predictionMask = [], [], [], [], []
 
         # === UTILITIES ===
         bound_years = lambda data : bound_data(data, self.startYear, self.endYear)
@@ -71,13 +71,17 @@ class Preprocessor:
 
         map_columns = lambda df, map : DataFrame(df).columns.map(map)
 
-        def add_metric(metric, map=None, name=None):
+        def add_metric(metric, type, backgroundInclusion, foresightInclusion, predictionInclusion, map=None, name=None):
             if map:
                 metric = DataFrame(metric).map(map)
             if name:
                 print(f"{name}\n{metric}")
             metrics.append(metric)
-
+            metricTypes.append(type)
+            backgroundMask.append(backgroundInclusion)
+            foresightMask.append(foresightInclusion)
+            predictionMask.append(predictionInclusion)
+        
         # === FILE IMPORTS ===
         coachJSON = load_json('files/trimmed_coach_dictionary.json')
         schoolMapJSON = load_json('files/mapping_schools.json')
@@ -317,34 +321,54 @@ class Preprocessor:
 
         # === METRICS COMPILATION ===
         school_coach_year = tabulate(coachJSON, columnDepth=3, indexDepth=0, valueDepth=1)
-        add_metric(school_coach_year, map=school_map, name="school_coach_year")
+        add_metric(school_coach_year, str, True, True, False, school_map, "school_coach_year")
         
         role_coach_year = tabulate(coachJSON, columnDepth=3, indexDepth=0, valueDepth=2)
-        add_metric(role_coach_year, map=role_map, name="role_coach_year")
+        add_metric(role_coach_year, [str, int], [True, True], [False, False], [False, False], role_map, "role_coach_year")
         
         rank_school_year = tabulate(pollsJSON, columnDepth=(2, None), indexDepth=0, valueDepth=1)
         rank_school_year = rank_school_year.apply(to_numeric, errors='coerce')
         map_columns(rank_school_year, school_map)
         rank_coach_year = recolumnate(rank_school_year, school_coach_year)
-        add_metric(rank_coach_year, map=rank_map, name="rank_coach_year")
+        add_metric(rank_coach_year, int, True, False, True, rank_map, "rank_coach_year")
 
         record_school_year = tabulate(recordsJSON, columnDepth=0, indexDepth=1, valueDepth=(2, None))
         record_school_year = map_columns(record_school_year, school_map)
         record_coach_year = recolumnate(record_school_year, school_coach_year)
         # BCS_sos = get_sos_utilities()
         record_coach_year = record_coach_year.apply(annual_record_map, axis=1)
-        # add_metric(record_coach_year, name="record_coach_year")
+        '''add_metric(
+            record_coach_year,
+            recordFeatureTypes,
+            recordBackgroundInclusions,
+            recordForesightInclusions,
+            recordPredictionInclusions,
+            name="record_coach_year"
+        )'''
 
         # === PACKAGING METRICS ===
+        # --- Listing feature and label types ---
+        XTypes, YTypes = [], []
+        for type, background, foresight, prediction in zip(metricTypes, backgroundMask, foresightMask, predictionMask):
+            if background:
+                XTypes.append(type)
+            if foresight:
+                XTypes.append(type)
+            if prediction:
+                YTypes.append(type)
+
+        # --- Compiling features and labels ---
         X, Y = [], []
         for coach, i in zip(school_coach_year.columns, range(len(school_coach_year.columns))):
+
             schools = school_coach_year[coach]
             schoolChanges = schools != schools.shift()
             changeYears = schools.index[schoolChanges][1:]
 
             for changeYear in changeYears:
+
                 newSchool = school_coach_year.at[changeYear, coach]
-                if (newSchool != newSchool or
+                if (newSchool == "" or
                     changeYear - self.backgroundYears < self.startYear or
                     changeYear + self.predictionYears > self.endYear):
                     continue
@@ -353,36 +377,42 @@ class Preprocessor:
                 predictionYears = range(changeYear, changeYear + self.predictionYears)
 
                 predictionRoles = Series(role_coach_year.loc[predictionYears, coach]).values
-                if not all([role == 'HC' for role in predictionRoles]):
-                    continue
-
-                print(f"coach {i}, change {changeYear}, ({coach})")
                 predictionSchools = Series(school_coach_year.loc[predictionYears, coach]).values
-                padding = self.backgroundYears - self.predictionYears
-                predictionSchoolsPadding = [""] * padding
+                if (not all([role == 'HC' for role in predictionRoles]) or
+                    not all([school == newSchool for school in predictionSchools])):
+                    continue
+                
+                print(f"coach {i}, change {changeYear}, ({coach})")
+                XElement, YElement = [], []
+                for metric, type, background, foresight, prediction in zip(metrics, metricTypes, backgroundMask, foresightMask, predictionMask):
+                    backgroundMetric = list(Series(DataFrame(metric).loc[backgroundYears, coach]).values)
+                    predictionMetric = list(Series(DataFrame(metric).loc[predictionYears, coach]).values)
 
-                labelSet = []
-                for metric in metrics:
-                    metric = DataFrame(metric)
-                    feature = list(Series(metric.loc[predictionYears, coach]).values)
-                    if isinstance(feature[0], list):
-                        for subfeature in [list(subfeature) for subfeature in zip(*feature)]:
-                            labelSet.append(subfeature)
-                    else:
-                        labelSet.append(feature)
+                    if background:
+                        if isinstance(backgroundMetric[0], list):
+                            for subMetric in [list(subMetric) for subMetric in zip(*backgroundMetric)]:
+                                XElement.append(subMetric)
+                        else:
+                            XElement.append(backgroundMetric)
+                    
+                    if foresight:
+                        if isinstance(predictionMetric[0], list):
+                            for subMetric, subType in zip([list(subMetric) for subMetric in zip(*predictionMetric)], type):
+                                foresightPadding = [subType()] * (self.backgroundYears - self.predictionYears)
+                                XElement.append(foresightPadding + subMetric)
+                        else:
+                            foresightPadding = [type()] * (self.backgroundYears - self.predictionYears)
+                            XElement.append(foresightPadding + predictionMetric)
 
-                featureSet = [predictionSchoolsPadding + list(predictionSchools)]
-                for metric in metrics:
-                    metric = DataFrame(metric)
-                    feature = list(Series(metric.loc[backgroundYears, coach]).values)
-                    if isinstance(feature[0], list):
-                        for subfeature in [list(subfeature) for subfeature in zip(*feature)]:
-                            featureSet.append(subfeature)
-                    else:
-                        featureSet.append(feature)
+                    if prediction:
+                        if isinstance(predictionMetric[0], list):
+                            for subMetric in [list(subMetric) for subMetric in zip(*predictionMetric)]:
+                                YElement.append(subMetric)
+                        else:
+                            YElement.append(predictionMetric)
 
-                X.append(nparr(featureSet).T)
-                Y.append(nparr(labelSet).T)
+                X.append(nparr(XElement).T)
+                Y.append(nparr(YElement).T)
 
         X = nparr(X)
         Y = nparr(Y)
@@ -392,11 +422,15 @@ class Preprocessor:
         save_pkl(validX, "files/validX.pkl")
         save_pkl(trainY, "files/trainY.pkl")
         save_pkl(validY, "files/validY.pkl")
+        save_pkl(XTypes, "files/XTypes.pkl")
+        save_pkl(YTypes, "files/YTypes.pkl")
 
         self.preprocessedFiles = {
-            "trainX": "files/trainX.pkl",
-            "trainY": "files/trainY.pkl",
-            "validX": "files/validX.pkl",
-            "validY": "files/validY.pkl"
+            "trainX" : "files/trainX.pkl",
+            "trainY" : "files/trainY.pkl",
+            "validX" : "files/validX.pkl",
+            "validY" : "files/validY.pkl",
+            "XTypes" : "files/XTypes.pkl",
+            "YTypes" : "files/YTypes.pkl"
         }
         return
