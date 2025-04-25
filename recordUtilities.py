@@ -12,9 +12,15 @@ DII_links = load_json('files/DII_links.json')
 DIII_links = load_json('files/DIII_links.json')
 naia_links = load_json('files/naia_links.json')
 FCS_links = load_json('files/FCS_links.json')
-D1 = []
-pro = []
-other_schools = []
+nfl_links = load_json('files/nfl_links.json')
+cfl_links = load_json('files/cfl_links.json')
+arenafl_links = load_json('files/arenafl_links.json')
+ufl_links = load_json('files/ufl_links.json')
+usfl_links = load_json('files/usfl_links.json')
+
+D1 = list(school_links.keys())
+pro = list(nfl_links.keys()) + list(cfl_links.keys()) + list(arenafl_links.keys()) + list(ufl_links.keys()) + list(usfl_links.keys())
+other_schools = list(DII_links.keys()) + list(DIII_links.keys()) + list(naia_links.keys()) + list(FCS_links.keys())
 
 def ranking_score(team, year):
     '''this function computes the ranking score for a given team in a given year, as computed by the final AP poll.'''
