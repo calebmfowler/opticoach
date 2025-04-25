@@ -1,1 +1,8 @@
 __pycache__
+files/model.pkl
+files/trainX.pkl
+files/trainY.pkl
+files/validX.pkl
+files/validY.pkl
+files/XTypes.pkl
+files/YTypes.pkl
