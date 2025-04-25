@@ -180,7 +180,7 @@ def total_talent(team, year):
 def success_level(year, team):
     '''this function computes the success level of a team in a given year. It is regularized by talent level 
     and strength of schedule.'''
-    SOS = BCS_sos(team, year) #compute strength of schedule
+    sos = BCS_sos(team, year) #compute strength of schedule
     adjusted_talent = total_talent(team, year) #compute relative talent level
     rank_score = ranking_score(team, year) #compute final ranking score
     win_loss = win_percentage(team, year) #compute win percentage
@@ -188,7 +188,7 @@ def success_level(year, team):
         success = win_loss
     else:
         success = .8 * win_loss + .2 * rank_score #compute success level
-    score = success * SOS/(2*adjusted_talent) #regularize success level by talent and SOS
+    score = success * sos/(2*adjusted_talent) #regularize success level by talent and SOS
     return score
 
 def position_weight(string):

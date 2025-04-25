@@ -1,9 +1,10 @@
 from copy import deepcopy
 from keras.src import Model
 from keras.src.callbacks import ReduceLROnPlateau
-from keras.src.layers import Input, Masking, LSTM, Dense
+from keras.src.layers import Input, Embedding, Concatenate, Masking, LSTM, Dense
+from keras._tf_keras.keras.models import load_model
 from keras.src.optimizers import Adam
-import numpy as np
+from numpy import nan, newaxis, shape, unique
 from preprocess import Preprocessor
 from sklearn.preprocessing import MinMaxScaler
 from utilities import save_pkl, load_pkl
@@ -42,11 +43,15 @@ class OpticoachModel:
             self.modelFiles = {}
             self.predictedFiles = {}
             self.__preprocessedFiles = Preprocessor(arg).preprocessedFiles
+            self.__backgroundYears = Preprocessor(arg).backgroundYears
+            self.__predictionYears = Preprocessor(arg).predictionYears
             self.__build()
         elif type(arg) == OpticoachModel:
-            self.__preprocessedFiles = deepcopy(arg.__preprocessedFiles)
             self.modelFiles = deepcopy(arg.modelFiles)
             self.predictedFiles = deepcopy(arg.predictedFiles)
+            self.__preprocessedFiles = deepcopy(arg.__preprocessedFiles)
+            self.__backgroundYears = deepcopy(arg.__backgroundYears)
+            self.__predictionYears = deepcopy(arg.__predictionYears)
         else:
             raise Exception("Incorrect arguments for OpticoachModel.__init__(self, preprocessor)")
         return
@@ -58,14 +63,43 @@ class OpticoachModel:
         https://keras.io/api/layers/recurrent_layers/gru/
         https://chatgpt.com/share/67f4a398-42f8-8012-9c56-9538846a97b0
         '''
+        tX = load_pkl(self.__preprocessedFiles['trainX'])
+        vX = load_pkl(self.__preprocessedFiles['validX'])
+        tY = load_pkl(self.__preprocessedFiles['trainY'])
+        vY = load_pkl(self.__preprocessedFiles['validY'])
+        XTypes = load_pkl(self.__preprocessedFiles['XTypes'])
+        YTypes = load_pkl(self.__preprocessedFiles['YTypes'])
 
         # We first accept an input batch of coaches. For each coach, a time-ordered sequence of
-        # coaching metrics will be provided. In order to accomodate gaps in the data, a
-        # masking is used to cover missing time steps and missing metrics. There will be gaps in the
-        # time sequence in which a coach was not a head coach, and gaps in the metrics if data is
-        # not available.
-        input = Input((15, 8))
-        mask = Masking(mask_value=0.0)(input)
+        # coaching metrics will be provided. However, some of these metrics are categorical with
+        # string values, and so embedding layers are necessary
+        numericalInputs, categoricalInputs, embeddings = [], [], []
+        for i, type in enumerate(XTypes):
+            if type == str:
+                input = Input((self.__backgroundYears, ), name=f"input_{i}_cat")
+                categoricalInputs.append(input)
+                categoryCount = len(unique(tX[:, :, i]))
+                embedding = Embedding(
+                    categoryCount + 1,
+                    min(50, (categoryCount + 1) // 2)
+                )(input)
+                embeddings.append(embedding)
+            else:
+                input = Input((self.__backgroundYears, 1, ), name=f"input_{i}_num")
+                numericalInputs.append(input)
+        
+        numericalConcatenation = Concatenate()(numericalInputs) if numericalInputs else None
+        embeddingConcatenation = Concatenate()(embeddings) if embeddings else None
+        print(numericalConcatenation)
+        if numericalConcatenation is not None and embeddingConcatenation is not None:
+            merged = Concatenate()([numericalConcatenation, embeddingConcatenation])
+        else:
+            merged = numericalConcatenation or embeddingConcatenation
+        
+        # In order to accomodate gaps in the data, a masking is used to cover missing time steps 
+        # and missing metrics. There will be gaps in the time sequence in which a coach was not 
+        # a head coach, and gaps in the metrics if data is not available.
+        mask = Masking(mask_value=nan)(merged)
         
         # In order to handle long-term dependencies we will utilize a Long Short Term-Memory (LSTM)
         # layer. Dropout and regularization are also supplemented in order to avoid overfitting.
@@ -88,29 +122,28 @@ class OpticoachModel:
         # Finally, a few key coaching success metrics are trained on and predicted. For the
         # purpose of precise regression, linear activation is used.
         output = Dense(
-            8,
+            len(tY[0][0]),
             activation='linear'
         )(hidden)
 
         model = Model(inputs=input, outputs=output)
-        save_pkl(model, 'files/model.pkl')
-        self.modelFiles['model'] = 'files/model.pkl'
+        model.save('files/model.keras')
+        self.modelFiles['model'] = 'files/model.keras'
 
     def train(self):
         '''
         Train the recurrent neural network.
         '''
 
-        xScaler, yScaler = MinMaxScaler(), MinMaxScaler()
-
         tX = load_pkl(self.__preprocessedFiles['trainX'])
-        print(tX)
-        tY = load_pkl(self.__preprocessedFiles['trainY'])
-        print(tY)
         vX = load_pkl(self.__preprocessedFiles['validX'])
-        print(vX)
+        tY = load_pkl(self.__preprocessedFiles['trainY'])
         vY = load_pkl(self.__preprocessedFiles['validY'])
-        print(vY)
+        XTypes = load_pkl(self.__preprocessedFiles['XTypes'])
+        YTypes = load_pkl(self.__preprocessedFiles['YTypes'])
+
+        '''
+        xScaler, yScaler = MinMaxScaler(), MinMaxScaler()
 
         tXs = xScaler.fit_transform(tX)
         vXs = xScaler.transform(vX)
@@ -121,21 +154,34 @@ class OpticoachModel:
         save_pkl(yScaler, 'files/yScaler.pkl')
         self.modelFiles['xScaler'] = 'files/xScaler.pkl'
         self.modelFiles['yScaler'] = 'files/yScaler.pkl'
+        '''
+
+        def split_features(X, XTypes):
+            xList = []
+            for i in range(shape(X)[2]):
+                metric = X[:, :, i]
+                xList.append(metric[..., newaxis])
+        
+        tXS = split_features(tX, XTypes)
+        vXS = split_features(vX, XTypes)
 
         learningRateReducer = ReduceLROnPlateau(monitor='val_loss', factor=0.5, patience=3, min_lr=1e-6)
-        model = Model(load_pkl(self.modelFiles['model']))
+        
+        model = load_model(self.modelFiles['model'])
+        
         model.compile(
             optimizer=Adam(learning_rate=1e-2),
             loss='mse',
             metrics=['mse', 'mae']
         )
+        
         model.fit(
-            tXs, tYs,
+            tXS, tY,
             batch_size=16,
             epochs=100,
             verbose=2,
             callbacks=learningRateReducer,
-            validation_data=(vXs, vYs)
+            validation_data=(vXS, vY)
         )
 
         save_pkl(model, 'files/model.pkl')

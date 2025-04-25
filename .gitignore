@@ -1,5 +1,5 @@
 __pycache__
-files/model.pkl
+files/model.keras
 files/trainX.pkl
 files/trainY.pkl
 files/validX.pkl

@@ -3,7 +3,7 @@ from copy import deepcopy
 import numpy as np
 from numpy import array as nparr, nan, unique
 from pandas import DataFrame, Series, to_numeric
-from recordUtilities import BCS_sos, total_talent
+from recordUtilities import BCS_sos, total_talent, success_level
 from sklearn.model_selection import train_test_split
 from utilities import bound_data, load_json, recolumnate_df, save_pkl, serialize_dict, tabulate_dict
 
@@ -161,10 +161,10 @@ class Preprocessor:
                 scoringDefense = sum(nparr(scoringDefense)) / gameCount
                 winRate = winCount / gameCount
                 school = school_coach_year.at(year, coach)
-                BCS_strength = BCS_sos(school, year) #compute strength of schedule
-                talent_level = total_talent(school, year) #compute relative talent level
-                return [scoringOffense, scoringDefense, winRate, BCS_strength, talent_level]
-                # return [scoringOffense, scoringDefense, winRate]
+                strengthOfSchedule = BCS_sos(school, year)
+                teamTalent = total_talent(school, year)
+                # coachingSuccess = success_level(year, school)
+                return [scoringOffense, scoringDefense, winRate, strengthOfSchedule, teamTalent]
 
         def annual_record_map(season):
             season = Series(season)
@@ -190,14 +190,13 @@ class Preprocessor:
         record_school_year = tabulate(recordsJSON, columnDepth=0, indexDepth=1, valueDepth=(2, None))
         record_school_year = map_columns(record_school_year, school_map)
         record_coach_year = recolumnate(record_school_year, school_coach_year)
-        # BCS_sos = get_sos_utilities()
         record_coach_year = record_coach_year.apply(annual_record_map, axis=1)
         add_metric(
             record_coach_year,
-            [float, float, float],
-            [True, True, True],
-            [False, False, False],
-            [False, False, True],
+            [float, float, float, float, float, float],
+            [True, True, True, True, True],
+            [False, False, False, False, False],
+            [False, False, True, False, False],
             name="record_coach_year"
         )
 
