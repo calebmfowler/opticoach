@@ -55,6 +55,15 @@ class Preprocessor:
             self.preprocessedFiles = deepcopy(arg.preprocessedFiles)
         else:
             raise Exception("Incorrect arguments for Preprocessor.__init__(self, aggregator)")
+        
+        self.preprocessedFiles = {
+            "trainX" : "files/trainX.pkl",
+            "trainY" : "files/trainY.pkl",
+            "validX" : "files/validX.pkl",
+            "validY" : "files/validY.pkl",
+            "XTypes" : "files/XTypes.pkl",
+            "YTypes" : "files/YTypes.pkl"
+        }
         return
 
     def preprocess(self):
@@ -424,13 +433,4 @@ class Preprocessor:
         save_pkl(validY, "files/validY.pkl")
         save_pkl(XTypes, "files/XTypes.pkl")
         save_pkl(YTypes, "files/YTypes.pkl")
-
-        self.preprocessedFiles = {
-            "trainX" : "files/trainX.pkl",
-            "trainY" : "files/trainY.pkl",
-            "validX" : "files/validX.pkl",
-            "validY" : "files/validY.pkl",
-            "XTypes" : "files/XTypes.pkl",
-            "YTypes" : "files/YTypes.pkl"
-        }
         return
