@@ -94,14 +94,16 @@ class Preprocessor:
         # === FILE IMPORTS ===
         coachJSON = load_json('files/trimmed_coach_dictionary.json')
         schoolMapJSON = load_json('files/mapping_schools.json')
-        pollsJSON = load_json('files/final_polls.json')
+        pollsJSON = load_json('files/polls.json')
         recordsJSON = load_json('files/records.json')
         mascotsJSON = load_json('files/total_no_mascots_inv.json')
+        rostersJSON = load_json('files/rosters.json')
         school_links = load_json('files/school_links.json')
         DII_links = load_json('files/DII_links.json')
         DIII_links = load_json('files/DIII_links.json')
         naia_links = load_json('files/naia_links.json')
         FCS_links = load_json('files/FCS_links.json')
+        D1 = []
 
         # === MAPS ===
         def school_map(school):
@@ -137,7 +139,7 @@ class Preprocessor:
             '''this function computes the ranking score for a given team in a given year, as computed by the final AP poll.'''
             year = str(year)
             try:
-                team = maps[team] #convert team to standard name if possible
+                team = schoolMapJSON[team] #convert team to standard name if possible
             except:
                 team = team
             try:
@@ -163,21 +165,32 @@ class Preprocessor:
             '''this function contains all the functions needed to compute the strength of schedule for a given team in a given year.'''
             def team_avg(team, year):
                 year = str(year)
-                season = recordsJSON[mascotsJSON[team]][year]
-                wins = 0
-                for game in season:
-                    score = game[1]
-                    home_score = int(score.split('-')[0])
-                    away_score = int(score.split('-')[1])
-                    if home_score > away_score:
-                        wins += 1
-                    elif home_score == away_score:
-                        wins += .5
-                return wins/len(season)
+                try:
+                    team = schoolMapJSON[team] #convert team to standard name if possible
+                except:
+                    team = team
+                try:
+                    season = recordsJSON[mascotsJSON[team]][year]
+                    wins = 0
+                    for game in season:
+                        score = game[1]
+                        home_score = int(score.split('-')[0])
+                        away_score = int(score.split('-')[1])
+                        if home_score > away_score:
+                            wins += 1
+                        elif home_score == away_score:
+                            wins += .5
+                    return wins/len(season)
+                except:
+                    return .5 #if the team is not in the dictionary, return .5 (average win percentage)
             
             def sos(team, year):
                 '''this function computes the strength of schedule for a given team in a given year.'''
                 year = str(year) #convert year to string
+                try:
+                    team = schoolMapJSON[team] #convert team to standard name if possible
+                except:
+                    team = team
                 try:
                     season = recordsJSON[mascotsJSON[team]][year] #pull the season data for the team/year
                     team_list = []
@@ -194,6 +207,10 @@ class Preprocessor:
                 The BCS formula is as follows: BCS SOS = (2 * normal SOS + SOS of opponents) / 3'''
                 year = str(year) #convert year to string
                 try:
+                    team = schoolMapJSON[team] #convert team to standard name if possible
+                except:
+                    team = team
+                try:
                     season = recordsJSON[mascotsJSON[team]][year] #pull the season data for the team/year
                     team_sos = sos(team, int(year))
                     opponent_sos = 0
@@ -208,6 +225,10 @@ class Preprocessor:
             def sos_regular(team, year):
                 '''this function computes the regular strength of schedule for a given team in a given year.'''
                 year = str(year) #convert year to string
+                try:
+                    team = schoolMapJSON[team] #convert team to standard name if possible
+                except:
+                    team = team
                 try:
                     season = recordsJSON[mascotsJSON[team]][year] #pull the season data for the team/year
                     team_list = []
@@ -228,6 +249,10 @@ class Preprocessor:
                 The BCS formula is as follows: BCS SOS = (2 * normal SOS + SOS of opponents) / 3'''
                 year = str(year) #convert year to string
                 try:
+                    team = schoolMapJSON[team] #convert team to standard name if possible
+                except:
+                    team = team
+                try:
                     season = recordsJSON[mascotsJSON[team]][year] #pull the season data for the team/year
                     team_sos = sos_regular(team, int(year))
                     opponent_sos = 0
@@ -245,6 +270,7 @@ class Preprocessor:
                 return .5 * BCS_sos(team, year) + .5 * top25_score(team, year)'''
         def get_talent_utilities():
             '''this function contains all the functions needed to compute the talent level of a team in a given year.'''
+
             def position_weight(string):
                 '''this function computes the weight of a position based on its importance in football.'''
                 if string == 'QB': #QB tier
@@ -328,12 +354,12 @@ class Preprocessor:
             def talent_composite(year, team):
                 '''this function computes the talent level of a team in a given year. It is computed by incorporating position, pick number, and seniority of the players.'''
                 year = str(year)
-                try: #convert team to standard name if possible
-                    team = maps[team]
+                try:
+                    team = schoolMapJSON[team] #convert team to standard name if possible
                 except:
                     team = team
                 try: #if the team is in the dictionary, compute the talent level
-                    roster = roster_dict[year][team] #pull the roster for the year/team
+                    roster = rostersJSON[year][team] #pull the roster for the year/team
                     total = 0
                     for player in roster: #sum the talent levels of the players
                         position = player[1]
@@ -348,14 +374,14 @@ class Preprocessor:
             def max_talent(team, year):
                 '''this function computes the maximum talent level in a given year. It depends on whether the team is D1, pro, or some
                 other college division.'''
-                try: #convert team to standard name if possible
-                    team = maps[team]
+                try:
+                    team = schoolMapJSON[team] #convert team to standard name if possible
                 except:
                     team = team
                 if team in D1: #if the team is D1, we need to find the maximum talent level in D1
                     talent_composite_dict = []
                     for i in D1:
-                        team = maps[i]
+                        team = schoolMapJSON[i]
                         talent_composite_dict.append(talent_composite(year, team))
                     max_talent = max(talent_composite_dict)
                 elif team in pro: #parity in the NFL means max talent = min talent = .5
@@ -363,7 +389,10 @@ class Preprocessor:
                 else: #other college divisions
                     talent_composite_dict = []
                     for i in other_schools: #iterate through other schools
-                        team = maps[i]
+                        try:
+                            team = schoolMapJSON[i] #convert team to standard name if possible
+                        except:
+                            team = i
                         talent_composite_dict.append(talent_composite(year, team))
                     max_talent = max(talent_composite_dict)
                 return max_talent #return the maximum talent level for the year/school
@@ -381,12 +410,12 @@ class Preprocessor:
         def win_percentage(team, year):
             '''this function computes the win percentage of a team in a given year.'''
             year = str(year)
-            try: #convert team to standard name if possible
-                team = maps[team]
-            except:
-                team = team
             try:
-                season = recordsJSON[team][year] #pull the season data for the year/team
+                    team = schoolMapJSON[team] #convert team to standard name if possible
+                except:
+                    team = team
+            try:
+                season = recordsJSON[mascotsJSON[team]][year] #pull the season data for the year/team
                 wins = 0
                 games = len(season)
                 for game in season:
