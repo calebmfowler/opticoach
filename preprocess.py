@@ -79,6 +79,11 @@ class Preprocessor:
         pollsJSON = load_json('files/final_polls.json')
         recordsJSON = load_json('files/records.json')
         mascotsJSON = load_json('files/total_no_mascots_inv.json')
+        school_links = load_json('files/school_links.json')
+        DII_links = load_json('files/DII_links.json')
+        DIII_links = load_json('files/DIII_links.json')
+        naia_links = load_json('files/naia_links.json')
+        FCS_links = load_json('files/FCS_links.json')
 
         # === MAPS ===
         def school_map(school):
@@ -261,11 +266,11 @@ class Preprocessor:
             except:
                 team = team
             try:
-                no_mascot = no_mascots[team]
+                no_mascot = mascotsJSON[team]
             except:
                 no_mascot = team
             if no_mascot in college_list:
-                roster = roster_dict[year][team]
+                roster = rostersJSON[year][team]
                 total = 0
                 for player in roster:
                     position = player[1]
