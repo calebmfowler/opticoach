@@ -471,6 +471,8 @@ class Preprocessor:
             return BCS_sos
 
         def record_map(record, year, coach):
+            '''this function returns a list of statistical features for a given coach in a given year. It includes scoring offense,
+            scoring defense, win percentage, talent level, and strength of schedule.'''
             if record != record:
                 return []
             else:
@@ -495,10 +497,10 @@ class Preprocessor:
                 winRate = winCount / gameCount
                 school = school_coach_year.at(year, coach)
 
-                # BCS_strength = BCS_sos(school, year)
-                # talent_level = talent_composite(year, school)
-                # return [scoringOffense, scoringDefense, winRate, BCS_strength, talent_level]
-                return [scoringOffense, scoringDefense, winRate]
+                BCS_strength = BCS_sos(school, year) #compute strength of schedule
+                talent_level = total_talent(school, year) #compute relative talent level
+                return [scoringOffense, scoringDefense, winRate, BCS_strength, talent_level]
+                # return [scoringOffense, scoringDefense, winRate]
 
         def annual_record_map(season):
             season = Series(season)
