@@ -134,6 +134,7 @@ class Preprocessor:
                 return int(num)
 
         def get_sos_utilities():
+            '''this function contains all the functions needed to compute the strength of schedule for a given team in a given year.'''
             def team_avg(team, year):
                 year = str(year)
                 season = recordsJSON[mascotsJSON[team]][year]
@@ -149,52 +150,75 @@ class Preprocessor:
                 return wins/len(season)
             
             def sos(team, year):
-                year = str(year)
-                season = recordsJSON[mascotsJSON[team]][year]
-                team_list = []
-                avg = 0
-                for game in season:
-                    avg += team_avg(game[0], int(year))
-                avg = avg/len(season)
-                return avg
+                '''this function computes the strength of schedule for a given team in a given year.'''
+                year = str(year) #convert year to string
+                try:
+                    season = recordsJSON[mascotsJSON[team]][year] #pull the season data for the team/year
+                    team_list = []
+                    avg = 0
+                    for game in season:
+                        avg += team_avg(game[0], int(year))
+                    avg = avg/len(season)
+                    return avg
+                except:
+                    return .5 #if the team is not in the dictionary, return .5 (average SOS)
                 
             def BCS_sos(team, year):
-                year = str(year)
-                season = recordsJSON[mascotsJSON[team]][year]
-                team_sos = sos(team, int(year))
-                opponent_sos = 0
-                for game in season:
-                    opponent_sos += sos(game[0], int(year))
-                opponent_sos = opponent_sos/len(season)
-                total_sos = (2 * team_sos + opponent_sos)/3
-                return total_sos
+                '''this function computes the BCS strength of schedule for a given team in a given year.
+                The BCS formula is as follows: BCS SOS = (2 * normal SOS + SOS of opponents) / 3'''
+                year = str(year) #convert year to string
+                try:
+                    season = recordsJSON[mascotsJSON[team]][year] #pull the season data for the team/year
+                    team_sos = sos(team, int(year))
+                    opponent_sos = 0
+                    for game in season:
+                        opponent_sos += sos(game[0], int(year))
+                    opponent_sos = opponent_sos/len(season)
+                    total_sos = (2 * team_sos + opponent_sos)/3
+                    return total_sos
+                except:
+                    return .5 #if the team is not in the dictionary, return .5 (average SOS)
 
             def sos_regular(team, year):
-                year = str(year)
-                season = recordsJSON[mascotsJSON[team]][year]
-                team_list = []
-                avg = 0
-                game_count = 0
-                for game in season:
-                    if game[2] != 'BOWL' and game[2] != 'FBS':
-                        avg += team_avg(game[0], int(year))
-                avg = avg/len(season)
-                return avg
+                '''this function computes the regular strength of schedule for a given team in a given year.'''
+                year = str(year) #convert year to string
+                try:
+                    season = recordsJSON[mascotsJSON[team]][year] #pull the season data for the team/year
+                    team_list = []
+                    avg = 0
+                    game_count = 0
+                    for game in season:
+                        if game[2] != 'BOWL' and game[2] != 'FBS':
+                            avg += team_avg(game[0], int(year))
+                        else:
+                            break
+                    avg = avg/len(season)
+                    return avg
+                except:
+                    return .5 #if the team is not in the dictionary, return .5 (average SOS)
 
             def BCS_sos_regular(team, year):
-                year = str(year)
-                season = recordsJSON[mascotsJSON[team]][year]
-                team_sos = sos_regular(team, int(year))
-                opponent_sos = 0
-                for game in season:
-                    opponent_sos += sos(game[0], int(year))
-                opponent_sos = opponent_sos/len(season)
-                total_sos = (2 * team_sos + opponent_sos)/3
-                return total_sos
+                '''this function computes the BCS strength of schedule for the regular season of a team in a given year.
+                The BCS formula is as follows: BCS SOS = (2 * normal SOS + SOS of opponents) / 3'''
+                year = str(year) #convert year to string
+                try:
+                    season = recordsJSON[mascotsJSON[team]][year] #pull the season data for the team/year
+                    team_sos = sos_regular(team, int(year))
+                    opponent_sos = 0
+                    for game in season:
+                        opponent_sos += sos(game[0], int(year))
+                    opponent_sos = opponent_sos/len(season)
+                    total_sos = (2 * team_sos + opponent_sos)/3
+                    return total_sos
+                except:
+                    total_sos = .5 #if the team is not in the dictionary, return .5 (average SOS)
+                    return total_sos
+
             
             '''def sos_top25(team, year):
                 return .5 * BCS_sos(team, year) + .5 * top25_score(team, year)'''
-
+        def get_talent_utilities():
+            '''this function contains all the functions needed to compute the talent level of a team in a given year.'''
             def position_weight(string):
                 '''this function computes the weight of a position based on its importance in football.'''
                 if string == 'QB': #QB tier
@@ -328,15 +352,15 @@ class Preprocessor:
                 except:
                     return .5 #if the team is not in the dictionary, return .5 (average talent level)
 
-            def success_level(year, team):
-                '''this function computes the success level of a team in a given year. It is regularized by talent level 
-                and strength of schedule.'''
-                SOS = .5
-                adjusted_talent = total_talent(team, year)
-                final_ranking = 26-5
-                win_loss = .8
-                score = (.5 * win_loss + .5 * final_ranking) * SOS/(2*adjusted_talent)
-                return score
+        def success_level(year, team):
+            '''this function computes the success level of a team in a given year. It is regularized by talent level 
+            and strength of schedule.'''
+            SOS = BCS_sos(team, year) #compute strength of schedule
+            adjusted_talent = total_talent(team, year)
+            final_ranking = 26-5
+            win_loss = .8
+            score = (.5 * win_loss + .5 * final_ranking) * SOS/(2*adjusted_talent)
+            return score
 
             '''def talent_composite(year, team):
                 year = str(year)
