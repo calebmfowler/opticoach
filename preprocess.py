@@ -142,24 +142,40 @@ class Preprocessor:
             scoring defense, win percentage, talent level, and strength of schedule.'''
             if record != record or record == []:
                 return [nan, nan, nan]
+            
+            elif not isinstance(record[0], list):
+                game = record
+                score = str(game[1]).split('-')
+                offense, defense, win = int(score[0]), int(score[1]), 0
+
+                if offense > defense:
+                    win += 1
+                elif offense == defense:
+                    win += 0.5
+                
+                return [offense, defense, win]
+            
             else:
+                print(f"record\n{record}")
                 gameCount = len(record)
-                scoringOffense = []
-                scoringDefense = []
-                winCount = 0.
+                scoringOffense = 0.
+                scoringDefense = 0.
+                winRate = 0.
+
                 for game in record:
+                    print(f"game\n{game}")
                     score = str(game[1]).split('-')
                     offense, defense = int(score[0]), int(score[1])
-                    scoringOffense.append(offense)
-                    scoringDefense.append(defense)
+                    scoringOffense += offense
+                    scoringDefense += defense
                     if offense > defense:
-                        winCount += 1
+                        winRate += 1
                     elif offense == defense:
-                        winCount += .5
-                scoringOffense = sum(nparr(scoringOffense)) / gameCount
-                scoringDefense = sum(nparr(scoringDefense)) / gameCount
-                winRate = winCount / gameCount
-                school = school_coach_year.at[year, coach]
+                        winRate += .5
+                
+                scoringOffense /= gameCount
+                scoringDefense /= gameCount
+                winRate /= gameCount
 
                 return [scoringOffense, scoringDefense, winRate]
 
