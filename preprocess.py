@@ -353,7 +353,7 @@ class Preprocessor:
             [],
             True,
             False,
-            True,
+            False,
             rank_map,
             "rank_coach_year"
         )
