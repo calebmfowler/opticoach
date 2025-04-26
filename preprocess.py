@@ -290,14 +290,12 @@ class Preprocessor:
         record_school_year = map_columns(record_school_year, school_map)
         schoolVocabulary = unique(hstack((unique(school_coach_year), rank_school_year.columns, record_school_year.columns)))
         schoolVocabulary = insert(schoolVocabulary[1:], 0, ['', '[UNK]'])
-        print(f"len(schoolVocabulary) = {len(schoolVocabulary)}")
         schoolVectorization = TextVectorization(standardize=None, split=None, vocabulary=schoolVocabulary)
 
         role_coach_year = tabulate(coachJSON, columnDepth=3, indexDepth=0, valueDepth=2)
         role_coach_year = role_coach_year.map(role_map)
         roleTitle_coach_year = role_coach_year.map(role_title_map)
         roleTitleVocabulary = insert(unique(roleTitle_coach_year)[1:], 0, ['', '[UNK]'])
-        print(f"len(roleTitleVocabulary) = {len(roleTitleVocabulary)}")
         roleTitleVectorization = TextVectorization(standardize=None, split=None, vocabulary=roleTitleVocabulary)
 
         # --- Metric Enumeration ---

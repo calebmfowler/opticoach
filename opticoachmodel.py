@@ -40,19 +40,20 @@ class OpticoachModel:
 
     def __init__(self, arg):
         if type(arg) == Preprocessor:
-            self.modelFiles = {
-                'model' : 'files/model.keras',
+            self.predictedFiles = {
                 'trainP' : 'files/trainP.pkl',
                 'validP' : 'files/validP.pkl'
             }
-            self.predictedFiles = {}
+            self.__modelFiles = {
+                'model' : 'files/model.keras'
+            }
             self.__preprocessedFiles = Preprocessor(arg).preprocessedFiles
             self.__backgroundYears = Preprocessor(arg).backgroundYears
             self.__predictionYears = Preprocessor(arg).predictionYears
             self.__build()
         elif type(arg) == OpticoachModel:
-            self.modelFiles = deepcopy(arg.modelFiles)
             self.predictedFiles = deepcopy(arg.predictedFiles)
+            self.__modelFiles = deepcopy(arg.__modelFiles)
             self.__preprocessedFiles = deepcopy(arg.__preprocessedFiles)
             self.__backgroundYears = deepcopy(arg.__backgroundYears)
             self.__predictionYears = deepcopy(arg.__predictionYears)
@@ -81,7 +82,6 @@ class OpticoachModel:
                 inputLayer = Input((self.__backgroundYears,), name=f"input_{i}_cat")
                 inputLayers.append(inputLayer)
                 vocabSize = len(XVocabs[i])
-                print(f"vocabSize_{i} = {vocabSize}")
                 embeddingLayer = Embedding(
                     vocabSize + 1,
                     min(50, (vocabSize + 1) // 2)
@@ -133,7 +133,7 @@ class OpticoachModel:
         )(unnormalizedLayer)
 
         model = Model(inputs=inputLayers, outputs=outputLayer)
-        model.save(self.modelFiles['model'])
+        model.save(self.__modelFiles['model'])
 
     def train(self):
         '''
@@ -145,11 +145,6 @@ class OpticoachModel:
         tY = load_pkl(self.__preprocessedFiles['trainY'])
         vY = load_pkl(self.__preprocessedFiles['validY'])
         XEmbeds = load_pkl(self.__preprocessedFiles['XEmbeds'])
-
-        print("NaN in tX:", isnan(tX).any())
-        print("NaN in tY:", isnan(tY).any())
-        print("NaN in vX:", isnan(vX).any())
-        print("NaN in vY:", isnan(vY).any())
 
         def split_features(X):
             xList = []
@@ -163,7 +158,7 @@ class OpticoachModel:
 
         learningRateReducer = ReduceLROnPlateau(monitor='val_loss', factor=0.5, patience=3, min_lr=1e-6)
         
-        model = load_model(self.modelFiles['model'])
+        model = load_model(self.__modelFiles['model'])
         
         model.compile(
             optimizer=Adam(learning_rate=1e-2),
@@ -180,12 +175,12 @@ class OpticoachModel:
             validation_data=(vXS, vY)
         )
 
-        model.save(self.modelFiles['model'])
+        model.save(self.__modelFiles['model'])
 
         return
 
     def predict(self):
-        model = load_model(self.modelFiles['model'])
+        model = load_model(self.__modelFiles['model'])
 
         tX = load_pkl(self.__preprocessedFiles['trainX'])
         vX = load_pkl(self.__preprocessedFiles['validX'])
@@ -206,7 +201,7 @@ class OpticoachModel:
         tP = model.predict(tXS)
         vP = model.predict(vXS)
 
-        save_pkl(tP, self.modelFiles['trainP'])
-        save_pkl(vP, self.modelFiles['validP'])
+        save_pkl(tP, self.predictedFiles['trainP'])
+        save_pkl(vP, self.predictedFiles['validP'])
 
         return
