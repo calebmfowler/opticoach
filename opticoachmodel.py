@@ -1,7 +1,7 @@
 from copy import deepcopy
 from keras.src import Model
 from keras.src.callbacks import ReduceLROnPlateau
-from keras.src.layers import Input, Embedding, Concatenate, Masking, LSTM, Dense
+from keras.src.layers import Input, Embedding, Concatenate, Masking, LSTM, Dense, TextVectorization
 from keras._tf_keras.keras.models import load_model
 from keras.src.optimizers import Adam
 from numpy import nan, newaxis, shape, unique
@@ -72,8 +72,8 @@ class OpticoachModel:
 
         # We first accept an input batch of coaches. For each coach, a time-ordered sequence of
         # coaching metrics will be provided. However, some of these metrics are categorical with
-        # string values, and so embedding layers are necessary
-        inputLayers, numericalInputs, embeddingLayers = [], [], []
+        # string values, and so we must use a TextVectorization layer on these.
+        inputLayers, categoricalInputs, numericalInputs = [], []
         for i, type in enumerate(XTypes):
             if type == str:
                 inputLayer = Input((self.__backgroundYears,), name=f"input_{i}_cat")
@@ -143,9 +143,6 @@ class OpticoachModel:
         XTypes = load_pkl(self.__preprocessedFiles['XTypes'])
         YTypes = load_pkl(self.__preprocessedFiles['YTypes'])
 
-        print(f"tX\n{tX}")
-        print(f"tY\n{tY}")
-
         '''
         xScaler, yScaler = MinMaxScaler(), MinMaxScaler()
 
@@ -160,15 +157,18 @@ class OpticoachModel:
         self.modelFiles['yScaler'] = 'files/yScaler.pkl'
         '''
 
-        def split_features(X):
+        def split_features(X, XTypes):
             xList = []
-            for i in range(shape(X)[2]):
+            for i, type in enumerate(XTypes):
                 metric = X[:, :, i]
+                if type == str:
+                    # Ensure categorical features are integers (e.g., indices for embeddings)
+                    metric = metric.astype('int32')
                 xList.append(metric[..., newaxis])
             return xList
         
-        tXS = split_features(tX)
-        vXS = split_features(vX)
+        tXS = split_features(tX, XTypes)
+        vXS = split_features(vX, XTypes)
 
         learningRateReducer = ReduceLROnPlateau(monitor='val_loss', factor=0.5, patience=3, min_lr=1e-6)
         
@@ -180,8 +180,6 @@ class OpticoachModel:
             metrics=['mse', 'mae']
         )
         
-        print(f"tXS\n{tXS}")
-        print(f"tY\n{tY}")
         model.fit(
             tXS, tY,
             batch_size=16,

@@ -1,5 +1,6 @@
 from aggregate import Aggregator
 from copy import deepcopy
+from keras.src.layers import TextVectorization
 import numpy as np
 from numpy import array as nparr, nan, shape, unique
 from pandas import DataFrame, Series, to_numeric
@@ -401,8 +402,22 @@ class Preprocessor:
 
         X = nparr(X)
         Y = nparr(Y)
-        print(f"X (shape = {shape(X)})\n{X}")
-        print(f"Y (shape = {shape(Y)})\n{Y}")
+
+        XVocabSizes = []
+        for i, type in enumerate(XTypes):
+            if type == str:
+                stringInputLayer = TextVectorization(standardize=None, split=None)
+                stringInputLayer.adapt(X[:, :, i])
+                X[:, :, i] = stringInputLayer(X[:, :, i])
+                XVocabSizes.append
+            else:
+                XVocabSizes.append(-1)
+
+        for i, type in enumerate(YTypes):
+            if type == str:
+                stringInputLayer = TextVectorization(standardize=None, split=None)
+                stringInputLayer.adapt(Y[:, :, i])
+                Y[:, :, i] = stringInputLayer(Y[:, :, i])
 
         trainX, validX, trainY, validY = train_test_split(X, Y, test_size=0.2)
 
