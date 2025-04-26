@@ -102,7 +102,7 @@ class Preprocessor:
         
         # === FILE IMPORTS ===
 
-        coachJSON = load_json('files/trimmed_coach_dictionary.json')
+        coachJSON = load_json('files/coach_history_regularized.json')
         schoolMapJSON = load_json('files/mapping_schools.json')
         pollsJSON = load_json('files/final_polls.json')
         recordsJSON = load_json('files/records.json')

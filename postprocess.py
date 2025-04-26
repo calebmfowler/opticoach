@@ -1,7 +1,8 @@
 from copy import deepcopy
 from opticoachmodel import OpticoachModel
+from numpy import sum, mean, shape
 from preprocess import Preprocessor
-import numpy as np
+from utilities import load_pkl
 
 class Postprocessor:
     '''
@@ -42,31 +43,24 @@ class Postprocessor:
         """
         self.postprocessedFiles = {}
 
-        # Load predictions and actual targets
-        tP = np.load(self.__predictedFiles["trainP"])
-        vP = np.load(self.__predictedFiles["validP"])
-        tY = np.load(self.__preprocessedFiles["trainY"])
-        vY = np.load(self.__preprocessedFiles["validY"])
+        tP = load_pkl(self.__predictedFiles["trainP"])
+        vP = load_pkl(self.__predictedFiles["validP"])
+        tY = load_pkl(self.__preprocessedFiles["trainY"])
+        vY = load_pkl(self.__preprocessedFiles["validY"])
 
-        # Ensure shapes match
-        if tP.shape != tY.shape or vP.shape != vY.shape:
-            raise ValueError("Shape mismatch between predictions and targets.")
-
-        # Initialize dictionaries to store R² values
         r2_train = []
         r2_valid = []
 
-        # Check if there are multiple outputs
-        if len(tP.shape) > 1 and tP.shape[1] > 1:
-            for i in range(tP.shape[1]):  # Iterate over each output
+        if len(shape(tP)) > 1 and shape(tP)[1] > 1:
+            for i in range(shape(tP)[1]):  # Iterate over each output
                 # Calculate R² for training set
-                ss_res_train = np.sum((tY[:, i] - tP[:, i]) ** 2)  # Residual Sum of Squares
-                ss_tot_train = np.sum((tY[:, i] - np.mean(tY[:, i])) ** 2)  # Total Sum of Squares
+                ss_res_train = sum((tY[:, i] - tP[:, i]) ** 2)  # Residual Sum of Squares
+                ss_tot_train = sum((tY[:, i] - mean(tY[:, i])) ** 2)  # Total Sum of Squares
                 r2_train.append(1 - (ss_res_train / ss_tot_train))
 
                 # Calculate R² for validation set
-                ss_res_valid = np.sum((vY[:, i] - vP[:, i]) ** 2)  # Residual Sum of Squares
-                ss_tot_valid = np.sum((vY[:, i] - np.mean(vY[:, i])) ** 2)  # Total Sum of Squares
+                ss_res_valid = sum((vY[:, i] - vP[:, i]) ** 2)  # Residual Sum of Squares
+                ss_tot_valid = sum((vY[:, i] - mean(vY[:, i])) ** 2)  # Total Sum of Squares
                 r2_valid.append(1 - (ss_res_valid / ss_tot_valid))
 
                 # Print R² values
@@ -76,21 +70,17 @@ class Postprocessor:
         else:
             # Single output case
             # Calculate R² for training set
-            ss_res_train = np.sum((tY - tP) ** 2)  # Residual Sum of Squares
-            ss_tot_train = np.sum((tY - np.mean(tY)) ** 2)  # Total Sum of Squares
+            ss_res_train = sum((tY - tP) ** 2)  # Residual Sum of Squares
+            ss_tot_train = sum((tY - mean(tY)) ** 2)  # Total Sum of Squares
             r2_train = 1 - (ss_res_train / ss_tot_train)
 
             # Calculate R² for validation set
-            ss_res_valid = np.sum((vY - vP) ** 2)  # Residual Sum of Squares
-            ss_tot_valid = np.sum((vY - np.mean(vY)) ** 2)  # Total Sum of Squares
+            ss_res_valid = sum((vY - vP) ** 2)  # Residual Sum of Squares
+            ss_tot_valid = sum((vY - mean(vY)) ** 2)  # Total Sum of Squares
             r2_valid = 1 - (ss_res_valid / ss_tot_valid)
 
             # Print R² values
             print(f"R² value (train): {r2_train}")
             print(f"R² value (valid): {r2_valid}")
-
-        # Store R² values in postprocessedFiles
-        self.postprocessedFiles["r2_train"] = r2_train
-        self.postprocessedFiles["r2_valid"] = r2_valid
 
         return
