@@ -41,12 +41,19 @@ class Preprocessor:
     
     def __init__(self, arg, startYear=1936, endYear=2024, backgroundYears=15, predictionYears=5):
         if type(arg) == Aggregator:
+            self.preprocessedFiles = {
+                "trainX" : "files/trainX.pkl",
+                "trainY" : "files/trainY.pkl",
+                "validX" : "files/validX.pkl",
+                "validY" : "files/validY.pkl",
+                "XEmbeds" : "files/XEmbeds.pkl",
+                "vocabularies" : "files/vocabularies.pkl"
+            }
             self.__aggregatedFiles = Aggregator(arg).aggregatedFiles
             self.startYear = startYear
             self.endYear = endYear
             self.backgroundYears = backgroundYears
             self.predictionYears = predictionYears
-            self.preprocessedFiles = {}
         elif type(arg) == Preprocessor:
             self.__aggregatedFiles = deepcopy(arg.__aggregatedFiles)
             self.startYear = deepcopy(arg.startYear)
@@ -56,19 +63,10 @@ class Preprocessor:
             self.preprocessedFiles = deepcopy(arg.preprocessedFiles)
         else:
             raise Exception("Incorrect arguments for Preprocessor.__init__(self, aggregator)")
-        
-        self.preprocessedFiles = {
-            "trainX" : "files/trainX.pkl",
-            "trainY" : "files/trainY.pkl",
-            "validX" : "files/validX.pkl",
-            "validY" : "files/validY.pkl",
-            "XTypes" : "files/XTypes.pkl",
-            "YTypes" : "files/YTypes.pkl"
-        }
         return
 
     def preprocess(self):
-        metrics, metricTypes, backgroundMask, foresightMask, predictionMask = [], [], [], [], []
+        metrics, metricTypes, embedMask, backgroundMask, foresightMask, predictionMask, vocabularies = [], [], [], [], [], [], []
 
         # === UTILITIES ===
 
@@ -85,7 +83,7 @@ class Preprocessor:
             df.columns = df.columns.map(map)
             return df
 
-        def add_metric(metric, metricType, backgroundInclusion, foresightInclusion, predictionInclusion, map=None, name=None):
+        def add_metric(metric, metricType, metricEmbed, background, foresight, prediction, map=None, name=None):
             if map:
                 metric = DataFrame(metric).map(map)
 
@@ -94,9 +92,10 @@ class Preprocessor:
             
             metrics.append(metric)
             metricTypes.append(metricType)
-            backgroundMask.append(backgroundInclusion)
-            foresightMask.append(foresightInclusion)
-            predictionMask.append(predictionInclusion)
+            embedMask.append(metricEmbed)
+            backgroundMask.append(background)
+            foresightMask.append(foresight)
+            predictionMask.append(prediction)
 
             return metric
         
@@ -116,22 +115,28 @@ class Preprocessor:
                 return schoolMapJSON[school]
             else:
                 return str(school)
-            
+        
         def role_map(role):
             if role != role:
                 return ["", nan]
             else:
-                role = str(role)
-                i = role.find('/')
+                roleTitle = str(role)
+                i = roleTitle.find('/')
                 if i != -1:
-                    role = role[:i]
-                if role == 'HC':
-                    return [role, 0]
-                elif role in ['OC', 'DC']:
-                    return [role, 1]
+                    roleTitle = roleTitle[:i]
+                if roleTitle == 'HC':
+                    return [roleTitle, 0]
+                elif roleTitle in ['OC', 'DC']:
+                    return [roleTitle, 1]
                 else:
-                    return [role, 2]
-            
+                    return [roleTitle, 2]
+        
+        def role_title_map(role):
+            return role[0]
+        
+        def role_rank_map(role):
+            return role[1]
+
         def rank_map(num):
             if num != num:
                 return 30
@@ -139,8 +144,10 @@ class Preprocessor:
                 return int(num)
 
         def performance_map(record, year, coach):
-            '''this function returns a list of statistical features for a given coach in a given year. It includes scoring offense,
-            scoring defense, win percentage, talent level, and strength of schedule.'''
+            '''
+            this function returns a list of statistical features for a given coach in a given year. It includes scoring offense,
+            scoring defense, win percentage, talent level, and strength of schedule.
+            '''
             if record != record or record == []:
                 return [nan, nan, nan]
             
@@ -273,24 +280,30 @@ class Preprocessor:
         # === METRICS COMPILATION ===
 
         school_coach_year = tabulate(coachJSON, columnDepth=3, indexDepth=0, valueDepth=1)
-        school_coach_year = add_metric(school_coach_year, str, True, True, False, school_map, "school_coach_year")
-        
+        school_coach_year = school_coach_year.map(school_map)
+        schoolVocabulary = unique(school_coach_year)
+        vocabularies.append(schoolVocabulary)
+        schoolVectorization = TextVectorization(standardize=None, split=None, vocabulary=schoolVocabulary)
+        schoolInt_coach_year = schoolVectorization(school_coach_year)
+        schoolInt_coach_year = add_metric(schoolInt_coach_year, int, True, True, True, False, name="schoolInt_coach_year")
+
         role_coach_year = tabulate(coachJSON, columnDepth=3, indexDepth=0, valueDepth=2)
-        role_coach_year = add_metric(
-            role_coach_year,
-            [str, int],                         # metricType
-            [True, True],                       # backgroundMask    
-            [False, False],                     # foresightMask
-            [False, False],                     # predictionMask
-            role_map,
-            "role_coach_year"
-        )
-        
+        role_coach_year = role_coach_year.map(role_map)
+        roleTitle_coach_year = role_coach_year.map(role_title_map)
+        roleTitleVocabulary = unique(roleTitle_coach_year)
+        vocabularies.append(roleTitleVocabulary)
+        roleTitleVectorization = TextVectorization(standardize=None, split=None, vocabulary=roleTitleVocabulary)
+        roleTitleInt_coach_year = roleTitleVectorization(roleTitle_coach_year)
+        roleTitleInt_coach_year = add_metric(roleTitleInt_coach_year, int, True, True, False, False, name="roleTitleInt_coach_year")
+
+        roleRank_coach_year = role_coach_year.map(role_rank_map)
+        roleRank_coach_year = add_metric(roleRank_coach_year, int, False, True, False, False, name="roleRank_coach_year")
+
         rank_school_year = tabulate(pollsJSON, columnDepth=(2, None), indexDepth=0, valueDepth=1)
         rank_school_year = rank_school_year.apply(to_numeric, errors='coerce')
         rank_school_year = map_columns(rank_school_year, school_map)
         rank_coach_year = recolumnate(rank_school_year, school_coach_year)
-        rank_coach_year = add_metric(rank_coach_year, int, True, False, True, rank_map, "rank_coach_year")
+        rank_coach_year = add_metric(rank_coach_year, int, False, True, False, True, rank_map, "rank_coach_year")
 
         record_school_year = tabulate(recordsJSON, columnDepth=0, indexDepth=1, valueDepth=(2, None))
         record_school_year = map_columns(record_school_year, school_map)
@@ -299,6 +312,7 @@ class Preprocessor:
         performance_coach_year = add_metric(
             performance_coach_year,
             [float, float, float],              # metricType
+            [False, False, False],              # metricEmbed
             [True, True, True],                 # backgroundMask
             [False, False, False],              # foresightMask
             [False, False, True],               # predictionMask
@@ -309,38 +323,38 @@ class Preprocessor:
         winRate_coach_year = performance_coach_year.map(win_rate_map)
         avgOpponentWinRate_coach_year = record_coach_year.apply(annual_avg_opponent_win_rate_map, axis=1)
         sos_coach_year = record_coach_year.apply(annual_sos_map, axis=1)
-        sos_coach_year = add_metric(sos_coach_year, float, True, False, False, name="sos_coach_year")
+        sos_coach_year = add_metric(sos_coach_year, float, False, True, False, False, name="sos_coach_year")
 
         # === PACKAGING METRICS ===
 
         # --- Listing feature and label types ---
 
-        XTypes, YTypes = [], []
+        XTypes, XEmbeds, YTypes = [], [], []
 
-        for metricType, background, foresight, prediction in zip(metricTypes, backgroundMask, foresightMask, predictionMask):
+        for i, metricType in enumerate(metricTypes):
             if isinstance(metricType, list):
-                for subMetricType, subBackground, subForesight, subPrediction in zip(metricType, background, foresight, prediction):
-                    if subBackground:
+                for j, subMetricType in enumerate(metricType):
+                    if backgroundMask[i][j]:
                         XTypes.append(subMetricType)
-                    if subForesight:
+                        XEmbeds.append(embedMask[i][j])
+                    if foresightMask[i][j]:
                         XTypes.append(subMetricType)
-                    if subPrediction:
+                        XEmbeds.append(embedMask[i][j])
+                    if predictionMask[i][j]:
                         YTypes.append(subMetricType)
             else:   
-                if background:
+                if backgroundMask[i]:
                     XTypes.append(metricType)
-                if foresight:
+                    XEmbeds.append(embedMask[i])
+                if foresightMask[i]:
                     XTypes.append(metricType)
-                if prediction:
+                    XEmbeds.append(embedMask[i])
+                if predictionMask[i]:
                     YTypes.append(metricType)
         
-        save_pkl(XTypes, "files/XTypes.pkl")
-        save_pkl(YTypes, "files/YTypes.pkl")
+        save_pkl(XEmbeds, self.preprocessedFiles['XEmbeds'])
 
         # --- Compiling features and labels ---
-
-        print(f"XTypes\n{XTypes}")
-        print(f"YTypes\n{YTypes}")
 
         X, Y = [], []
 
@@ -369,9 +383,8 @@ class Preprocessor:
                 
                 print(f"coach {i}, change {changeYear}, ({coach})")
                 XSample, YSample = [], []
-                for metric, metricType, background, foresight, prediction in zip(
-                    metrics, metricTypes, backgroundMask, foresightMask, predictionMask
-                ):
+                # metricType, background, foresight, prediction
+                for i, metric in enumerate(metrics):
                     backgroundMetric = list(Series(DataFrame(metric).loc[backgroundYears, coach]).values)
                     predictionMetric = list(Series(DataFrame(metric).loc[predictionYears, coach]).values)
 
@@ -379,7 +392,7 @@ class Preprocessor:
                         for subBackgroundMetric, subPredictionMetric, subMetricType, subBackground, subForesight, subPrediction in zip(
                             [list(subMetric) for subMetric in zip(*backgroundMetric)],
                             [list(subMetric) for subMetric in zip(*predictionMetric)],
-                            metricType, background, foresight, prediction
+                            metricTypes[i], backgroundMask[i], foresightMask[i], predictionMask[i]
                         ):
                             if subBackground:
                                 XSample.append(subBackgroundMetric)
@@ -389,40 +402,21 @@ class Preprocessor:
                             if subPrediction:
                                 YSample.append(subPredictionMetric)
                     else:
-                        if background:
+                        if backgroundMask[i]:
                             XSample.append(backgroundMetric)
-                        if foresight:
-                            foresightPadding = [metricType()] * (self.backgroundYears - self.predictionYears)
+                        if foresightMask[i]:
+                            foresightPadding = [metricTypes[i]()] * (self.backgroundYears - self.predictionYears)
                             XSample.append(foresightPadding + predictionMetric)
-                        if prediction:
+                        if predictionMask[i]:
                             YSample.append(predictionMetric)
 
-                X.append(nparr(XSample).T)
-                Y.append(nparr(YSample).T)
-
-        X = nparr(X)
-        Y = nparr(Y)
-
-        XVocabSizes = []
-        for i, type in enumerate(XTypes):
-            if type == str:
-                stringInputLayer = TextVectorization(standardize=None, split=None)
-                stringInputLayer.adapt(X[:, :, i])
-                X[:, :, i] = stringInputLayer(X[:, :, i])
-                XVocabSizes.append
-            else:
-                XVocabSizes.append(-1)
-
-        for i, type in enumerate(YTypes):
-            if type == str:
-                stringInputLayer = TextVectorization(standardize=None, split=None)
-                stringInputLayer.adapt(Y[:, :, i])
-                Y[:, :, i] = stringInputLayer(Y[:, :, i])
+                X.append([list(row) for row in zip(*XSample)])
+                Y.append([list(row) for row in zip(*YSample)])
 
         trainX, validX, trainY, validY = train_test_split(X, Y, test_size=0.2)
 
-        save_pkl(trainX, "files/trainX.pkl")
-        save_pkl(validX, "files/validX.pkl")
-        save_pkl(trainY, "files/trainY.pkl")
-        save_pkl(validY, "files/validY.pkl")
+        save_pkl(trainX, self.preprocessedFiles['trainX'])
+        save_pkl(validX, self.preprocessedFiles['validX'])
+        save_pkl(trainY, self.preprocessedFiles['trainY'])
+        save_pkl(validY, self.preprocessedFiles['validY'])
         return

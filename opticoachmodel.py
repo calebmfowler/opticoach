@@ -40,7 +40,11 @@ class OpticoachModel:
 
     def __init__(self, arg):
         if type(arg) == Preprocessor:
-            self.modelFiles = {}
+            self.modelFiles = {
+                'model' : 'files/model.keras',
+                'trainP' : 'files/trainP.pkl',
+                'validP' : 'files/validP.pkl'
+            }
             self.predictedFiles = {}
             self.__preprocessedFiles = Preprocessor(arg).preprocessedFiles
             self.__backgroundYears = Preprocessor(arg).backgroundYears
@@ -63,44 +67,36 @@ class OpticoachModel:
         https://keras.io/api/layers/recurrent_layers/gru/
         https://chatgpt.com/share/67f4a398-42f8-8012-9c56-9538846a97b0
         '''
-        tX = load_pkl(self.__preprocessedFiles['trainX'])
-        vX = load_pkl(self.__preprocessedFiles['validX'])
+        
         tY = load_pkl(self.__preprocessedFiles['trainY'])
-        vY = load_pkl(self.__preprocessedFiles['validY'])
-        XTypes = load_pkl(self.__preprocessedFiles['XTypes'])
-        YTypes = load_pkl(self.__preprocessedFiles['YTypes'])
+        XEmbeds = load_pkl(self.__preprocessedFiles['XEmbeds'])
+        vocabularies = load_pkl(self.__preprocessedFiles['vocabularies'])
 
         # We first accept an input batch of coaches. For each coach, a time-ordered sequence of
         # coaching metrics will be provided. However, some of these metrics are categorical with
         # string values, and so we must use a TextVectorization layer on these.
-        inputLayers, categoricalInputs, numericalInputs = [], []
-        for i, type in enumerate(XTypes):
-            if type == str:
+        inputLayers, numerizedLayers = [], []
+        for i, embed in enumerate(XEmbeds):
+            if embed:
                 inputLayer = Input((self.__backgroundYears,), name=f"input_{i}_cat")
                 inputLayers.append(inputLayer)
-                categoryCount = len(unique(tX[:, :, i]))
+                vocabSize = len(vocabularies.pop(0))
                 embeddingLayer = Embedding(
-                    categoryCount + 1,
-                    min(50, (categoryCount + 1) // 2)
+                    vocabSize + 1,
+                    min(50, (vocabSize + 1) // 2)
                 )(inputLayer)
-                embeddingLayers.append(embeddingLayer)
+                numerizedLayers.append(embeddingLayer)
             else:
                 inputLayer = Input((self.__backgroundYears, 1), name=f"input_{i}_num")
                 inputLayers.append(inputLayer)
-                numericalInputs.append(inputLayer)
+                numerizedLayers.append(inputLayer)
         
-        numericalConcatenation = Concatenate()(numericalInputs) if numericalInputs else None
-        embeddingConcatenation = Concatenate()(embeddingLayers) if embeddingLayers else None
-        
-        if numericalConcatenation is not None and embeddingConcatenation is not None:
-            mergeConcatenation = Concatenate()([numericalConcatenation, embeddingConcatenation])
-        else:
-            mergeConcatenation = numericalConcatenation or embeddingConcatenation
+        numericalConcatenation = Concatenate()(numerizedLayers)
         
         # In order to accomodate gaps in the data, a masking is used to cover missing time steps 
         # and missing metrics. There will be gaps in the time sequence in which a coach was not 
         # a head coach, and gaps in the metrics if data is not available.
-        maskLayer = Masking(mask_value=nan)(mergeConcatenation)
+        maskLayer = Masking(mask_value=nan)(numericalConcatenation)
         
         # In order to handle long-term dependencies we will utilize a Long Short Term-Memory (LSTM)
         # layer. Dropout and regularization are also supplemented in order to avoid overfitting.
@@ -128,8 +124,7 @@ class OpticoachModel:
         )(hiddenLayer)
 
         model = Model(inputs=inputLayers, outputs=outputLayer)
-        model.save('files/model.keras')
-        self.modelFiles['model'] = 'files/model.keras'
+        model.save(self.modelFiles['model'])
 
     def train(self):
         '''
@@ -140,35 +135,18 @@ class OpticoachModel:
         vX = load_pkl(self.__preprocessedFiles['validX'])
         tY = load_pkl(self.__preprocessedFiles['trainY'])
         vY = load_pkl(self.__preprocessedFiles['validY'])
-        XTypes = load_pkl(self.__preprocessedFiles['XTypes'])
-        YTypes = load_pkl(self.__preprocessedFiles['YTypes'])
+        XEmbeds = load_pkl(self.__preprocessedFiles['XEmbeds'])
+        vocabularies = load_pkl(self.__preprocessedFiles['vocabularies'])
 
-        '''
-        xScaler, yScaler = MinMaxScaler(), MinMaxScaler()
-
-        tXs = xScaler.fit_transform(tX)
-        vXs = xScaler.transform(vX)
-        tYs = yScaler.fit_transform(tY)
-        vYs = yScaler.transform(vY)
-
-        save_pkl(xScaler, 'files/xScaler.pkl')
-        save_pkl(yScaler, 'files/yScaler.pkl')
-        self.modelFiles['xScaler'] = 'files/xScaler.pkl'
-        self.modelFiles['yScaler'] = 'files/yScaler.pkl'
-        '''
-
-        def split_features(X, XTypes):
+        def split_features(X):
             xList = []
-            for i, type in enumerate(XTypes):
-                metric = X[:, :, i]
-                if type == str:
-                    # Ensure categorical features are integers (e.g., indices for embeddings)
-                    metric = metric.astype('int32')
-                xList.append(metric[..., newaxis])
+            for i, embed in enumerate(XEmbeds):
+                metric = X[:][:][i]
+                xList.append(metric)
             return xList
         
-        tXS = split_features(tX, XTypes)
-        vXS = split_features(vX, XTypes)
+        tXS = split_features(tX)
+        vXS = split_features(vX)
 
         learningRateReducer = ReduceLROnPlateau(monitor='val_loss', factor=0.5, patience=3, min_lr=1e-6)
         
@@ -189,32 +167,20 @@ class OpticoachModel:
             validation_data=(vXS, vY)
         )
 
-        save_pkl(model, 'files/model.pkl')
-        self.modelFiles['model'] = 'files/model.pkl'
+        model.save(self.modelFiles['model'])
 
         return
 
     def predict(self):
         model = Model(load_pkl(self.modelFiles['model']))
 
-        xScaler = MinMaxScaler(load_pkl(self.modelFiles['xScaler']))
-        yScaler = MinMaxScaler(load_pkl(self.modelFiles['yScaler']))
-
         tX = load_pkl(self.__preprocessedFiles['trainX'])
         vX = load_pkl(self.__preprocessedFiles['validX'])
 
-        tXs = xScaler.transform(tX)
-        vXs = xScaler.transform(vX)
+        tP = model.predict(tX)
+        vP = model.predict(vX)
 
-        tPs = model.predict(tXs)
-        vPs = model.predict(vXs)
-
-        tP = yScaler.inverse_transform(tPs)
-        vP = yScaler.inverse_transform(vPs)
-
-        save_pkl(tP, 'files/trainP.pkl')
-        save_pkl(vP, 'files/validP.pkl')
-        self.modelFiles['trainP'] = 'files/trainP.pkl'
-        self.modelFiles['validP'] = 'files/validP.pkl'
+        save_pkl(tP, self.modelFiles['trainP'])
+        save_pkl(vP, self.modelFiles['validP'])
 
         return
