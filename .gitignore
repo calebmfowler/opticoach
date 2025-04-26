@@ -1,8 +1,10 @@
 __pycache__
-files/model.keras
 files/trainX.pkl
 files/trainY.pkl
 files/validX.pkl
 files/validY.pkl
-files/XTypes.pkl
-files/YTypes.pkl
+files/XEmbeds.pkl
+files/XVocabs.pkl
+files/model.keras
+files/trainP.pkl
+files/validP.pkl

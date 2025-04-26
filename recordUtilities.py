@@ -88,7 +88,7 @@ def sos(team, year):
 def BCS_sos(team, year):
     '''this function computes the BCS strength of schedule for a given team in a given year.
     The BCS formula is as follows: BCS SOS = (2 * normal SOS + SOS of opponents) / 3'''
-    year = str(year) #convert year to string
+    year = str(year) # convert year to string
     try:
         team = schoolMapJSON[team] #convert team to standard name if possible
     except:
