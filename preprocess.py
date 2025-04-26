@@ -277,10 +277,10 @@ class Preprocessor:
         role_coach_year = tabulate(coachJSON, columnDepth=3, indexDepth=0, valueDepth=2)
         role_coach_year = add_metric(
             role_coach_year,
-            [str, int],
-            [True, True],
-            [False, False],
-            [False, False],
+            [str, int],                         # metricType
+            [True, True],                       # backgroundMask    
+            [False, False],                     # foresightMask
+            [False, False],                     # predictionMask
             role_map,
             "role_coach_year"
         )
@@ -297,10 +297,10 @@ class Preprocessor:
         performance_coach_year = record_coach_year.apply(annual_performance_map, axis=1)
         performance_coach_year = add_metric(
             performance_coach_year,
-            [float, float, float],
-            [True, True, True],
-            [False, False, False],
-            [False, False, True],
+            [float, float, float],              # metricType
+            [True, True, True],                 # backgroundMask
+            [False, False, False],              # foresightMask
+            [False, False, True],               # predictionMask
             name="record_coach_year"
         )
 
@@ -367,7 +367,7 @@ class Preprocessor:
                     continue
                 
                 print(f"coach {i}, change {changeYear}, ({coach})")
-                XElement, YElement = [], []
+                XSample, YSample = [], []
                 for metric, metricType, background, foresight, prediction in zip(metrics, metricTypes, backgroundMask, foresightMask, predictionMask):
                     backgroundMetric = list(Series(DataFrame(metric).loc[backgroundYears, coach]).values)
                     predictionMetric = list(Series(DataFrame(metric).loc[predictionYears, coach]).values)
@@ -375,28 +375,28 @@ class Preprocessor:
                     if background:
                         if isinstance(backgroundMetric[0], list):
                             for subMetric in [list(subMetric) for subMetric in zip(*backgroundMetric)]:
-                                XElement.append(subMetric)
+                                XSample.append(subMetric)
                         else:
-                            XElement.append(backgroundMetric)
+                            XSample.append(backgroundMetric)
                     
                     if foresight:
                         if isinstance(predictionMetric[0], list):
                             for subMetric, subType in zip([list(subMetric) for subMetric in zip(*predictionMetric)], metricType):
                                 foresightPadding = [subType()] * (self.backgroundYears - self.predictionYears)
-                                XElement.append(foresightPadding + subMetric)
+                                XSample.append(foresightPadding + subMetric)
                         else:
                             foresightPadding = [metricType()] * (self.backgroundYears - self.predictionYears)
-                            XElement.append(foresightPadding + predictionMetric)
+                            XSample.append(foresightPadding + predictionMetric)
 
                     if prediction:
                         if isinstance(predictionMetric[0], list):
                             for subMetric in [list(subMetric) for subMetric in zip(*predictionMetric)]:
-                                YElement.append(subMetric)
+                                YSample.append(subMetric)
                         else:
-                            YElement.append(predictionMetric)
+                            YSample.append(predictionMetric)
 
-                X.append(nparr(XElement).T)
-                Y.append(nparr(YElement).T)
+                X.append(nparr(XSample).T)
+                Y.append(nparr(YSample).T)
 
         X = nparr(X)
         Y = nparr(Y)
