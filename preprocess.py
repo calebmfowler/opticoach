@@ -284,7 +284,11 @@ class Preprocessor:
         schoolVocabulary = insert(unique(school_coach_year)[1:], 0, ['', '[UNK]'])
         vocabularies.append(schoolVocabulary)
         schoolVectorization = TextVectorization(standardize=None, split=None, vocabulary=schoolVocabulary)
-        schoolInt_coach_year = schoolVectorization(school_coach_year)
+        schoolInt_coach_year = DataFrame(
+            schoolVectorization(school_coach_year),
+            columns=school_coach_year.columns,
+            index=school_coach_year.index
+        )
         schoolInt_coach_year = add_metric(schoolInt_coach_year, int, True, True, True, False, name="schoolInt_coach_year")
 
         role_coach_year = tabulate(coachJSON, columnDepth=3, indexDepth=0, valueDepth=2)
@@ -293,7 +297,11 @@ class Preprocessor:
         roleTitleVocabulary = insert(unique(roleTitle_coach_year)[1:], 0, ['', '[UNK]'])
         vocabularies.append(roleTitleVocabulary)
         roleTitleVectorization = TextVectorization(standardize=None, split=None, vocabulary=roleTitleVocabulary)
-        roleTitleInt_coach_year = roleTitleVectorization(roleTitle_coach_year)
+        roleTitleInt_coach_year = DataFrame(
+            roleTitleVectorization(roleTitle_coach_year),
+            columns=roleTitle_coach_year.columns,
+            index=roleTitle_coach_year.index
+        )
         roleTitleInt_coach_year = add_metric(roleTitleInt_coach_year, int, True, True, False, False, name="roleTitleInt_coach_year")
 
         roleRank_coach_year = role_coach_year.map(role_rank_map)
@@ -324,6 +332,8 @@ class Preprocessor:
         avgOpponentWinRate_coach_year = record_coach_year.apply(annual_avg_opponent_win_rate_map, axis=1)
         sos_coach_year = record_coach_year.apply(annual_sos_map, axis=1)
         sos_coach_year = add_metric(sos_coach_year, float, False, True, False, False, name="sos_coach_year")
+
+        save_pkl(vocabularies, self.preprocessedFiles['vocabularies'])
 
         # === PACKAGING METRICS ===
 
