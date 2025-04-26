@@ -1,6 +1,6 @@
 from copy import deepcopy
 from opticoachmodel import OpticoachModel
-from numpy import sum, mean, shape
+from numpy import sum, mean, shape, vstack
 from preprocess import Preprocessor
 from utilities import load_pkl
 
@@ -43,44 +43,25 @@ class Postprocessor:
         """
         self.postprocessedFiles = {}
 
-        tP = load_pkl(self.__predictedFiles["trainP"])
-        vP = load_pkl(self.__predictedFiles["validP"])
-        tY = load_pkl(self.__preprocessedFiles["trainY"])
-        vY = load_pkl(self.__preprocessedFiles["validY"])
+        tP = load_pkl(self.__predictedFiles['trainP'])
+        vP = load_pkl(self.__predictedFiles['validP'])
+        tY = load_pkl(self.__preprocessedFiles['trainY'])
+        vY = load_pkl(self.__preprocessedFiles['validY'])
 
-        r2_train = []
-        r2_valid = []
+        R2Train = []
+        R2Valid = []
 
-        if len(shape(tP)) > 1 and shape(tP)[1] > 1:
-            for i in range(shape(tP)[1]):  # Iterate over each output
-                # Calculate R² for training set
-                ss_res_train = sum((tY[:, i] - tP[:, i]) ** 2)  # Residual Sum of Squares
-                ss_tot_train = sum((tY[:, i] - mean(tY[:, i])) ** 2)  # Total Sum of Squares
-                r2_train.append(1 - (ss_res_train / ss_tot_train))
+        for i in range(shape(tP)[-1]):  # Iterate over each output
+            def get_r2(Y, P):
+                YSlice = Y[..., i].flatten()
+                PSlice = P[..., i].flatten()
+                ss_res_train = sum((YSlice - PSlice)**2)  # Residual Sum of Squares
+                ss_tot_train = sum((YSlice - mean(YSlice))**2)  # Total Sum of Squares
+                return 1 - ss_res_train / ss_tot_train
 
-                # Calculate R² for validation set
-                ss_res_valid = sum((vY[:, i] - vP[:, i]) ** 2)  # Residual Sum of Squares
-                ss_tot_valid = sum((vY[:, i] - mean(vY[:, i])) ** 2)  # Total Sum of Squares
-                r2_valid.append(1 - (ss_res_valid / ss_tot_valid))
-
-                # Print R² values
-                print(f"R² value for output {i} (train): {r2_train[-1]}")
-                print(f"R² value for output {i} (valid): {r2_valid[-1]}")
-
-        else:
-            # Single output case
-            # Calculate R² for training set
-            ss_res_train = sum((tY - tP) ** 2)  # Residual Sum of Squares
-            ss_tot_train = sum((tY - mean(tY)) ** 2)  # Total Sum of Squares
-            r2_train = 1 - (ss_res_train / ss_tot_train)
-
-            # Calculate R² for validation set
-            ss_res_valid = sum((vY - vP) ** 2)  # Residual Sum of Squares
-            ss_tot_valid = sum((vY - mean(vY)) ** 2)  # Total Sum of Squares
-            r2_valid = 1 - (ss_res_valid / ss_tot_valid)
-
-            # Print R² values
-            print(f"R² value (train): {r2_train}")
-            print(f"R² value (valid): {r2_valid}")
-
+            R2Train.append(get_r2(tP, tY))
+            R2Valid.append(get_r2(tP, tY))
+            print(f"R² value for output {i} (train): {R2Train[-1]}")
+            print(f"R² value for output {i} (valid): {R2Valid[-1]}")
+        
         return
