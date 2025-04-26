@@ -4,6 +4,8 @@ from keras.src.callbacks import ReduceLROnPlateau
 from keras.src.layers import Input, Embedding, Concatenate, Masking, Lambda, LSTM, Dense, TextVectorization, Normalization
 from keras._tf_keras.keras.models import load_model
 from keras.src.optimizers import Adam
+from keras_tuner import BayesianOptimization, HyperParameters
+import tensorflow as tf
 from numpy import array as nparr, isnan, isinf, nan, newaxis, shape, unique
 from preprocess import Preprocessor
 from slicer import Slicer
@@ -50,7 +52,7 @@ class OpticoachModel:
             self.__preprocessedFiles = Preprocessor(arg).preprocessedFiles
             self.__backgroundYears = Preprocessor(arg).backgroundYears
             self.__predictionYears = Preprocessor(arg).predictionYears
-            self.__build()
+            self.__build(hp=HyperParameters())  # Build the model with hyperparameters
         elif type(arg) == OpticoachModel:
             self.predictedFiles = deepcopy(arg.predictedFiles)
             self.__modelFiles = deepcopy(arg.__modelFiles)
@@ -61,13 +63,19 @@ class OpticoachModel:
             raise Exception("Incorrect arguments for OpticoachModel.__init__(self, preprocessor)")
         return
 
-    def __build(self):
+    def __build(self, hp: HyperParameters):
         '''
         Build the recurrent neural network.
         https://www.tensorflow.org/guide/keras/working_with_rnns
         https://keras.io/api/layers/recurrent_layers/gru/
         https://chatgpt.com/share/67f4a398-42f8-8012-9c56-9538846a97b0
         '''
+
+        # Define hyperparameters to tune
+        lstm_units = hp.Int('lstm_units', min_value=32, max_value=256, step=32)
+        dense_units = hp.Int('dense_units', min_value=32, max_value=128, step=32)
+        dropout_rate = hp.Float('dropout_rate', min_value=0.1, max_value=0.5, step=0.1)
+        learning_rate = hp.Float('learning_rate', min_value=1e-4, max_value=1e-2, sampling='log')
         
         tY = load_pkl(self.__preprocessedFiles['trainY'])
         XEmbeds = load_pkl(self.__preprocessedFiles['XEmbeds'])
@@ -92,21 +100,24 @@ class OpticoachModel:
                 inputLayers.append(inputLayer)
                 numerizedLayers.append(inputLayer)
         
+        # Concatenate numerical features
         numericalConcatenation = Concatenate()(numerizedLayers)
 
-        normalizedLayer = Normalization()(numericalConcatenation)
+        # Create the normalization layer
+        normalizationLayer = Normalization()(numericalConcatenation)
+        
         # In order to accomodate gaps in the data, a masking is used to cover missing time steps 
         # and missing metrics. There will be gaps in the time sequence in which a coach was not 
         # a head coach, and gaps in the metrics if data is not available.
-        maskLayer = Masking(mask_value=nan)(normalizedLayer)
+        maskLayer = Masking(mask_value=nan)(normalizationLayer)
         
         # In order to handle long-term dependencies we will utilize a Long Short Term-Memory (LSTM)
         # layer. Dropout and regularization are also supplemented in order to avoid overfitting.
         # We use chat's rule of thumb, lstm_units = min(128, max(32, features * 2)).
         lstmLayer = LSTM(
-            160,
-            dropout=0.2,
-            recurrent_dropout=0.2,
+            lstm_units,
+            dropout=dropout_rate,
+            recurrent_dropout=dropout_rate,
             kernel_regularizer='l2',
             return_sequences=True  # Ensure the LSTM outputs sequences for each time step
         )(maskLayer)
@@ -117,28 +128,42 @@ class OpticoachModel:
         # In order to interpret the LSTM output, a Dense layer is added. Dropout is omitted
         # following this layer because that adds imprecision to regression tasks.
         hiddenLayer = Dense(
-            64,
+            dense_units,
             activation='relu',
             kernel_regularizer='l2'
         )(slicedLayer)
-
-        # revert the normalization
-        unnormalizedLayer = Normalization(invert=True)(hiddenLayer)
         
         # Finally, a few key coaching success metrics are trained on and predicted. For the
         # purpose of precise regression, linear activation is used.
         outputLayer = Dense(
             len(tY[0][0]),
             activation='linear'
-        )(unnormalizedLayer)
+        )(hiddenLayer)
 
         model = Model(inputs=inputLayers, outputs=outputLayer)
+
+        model.compile(
+            optimizer=Adam(learning_rate=learning_rate),
+            loss='mse',
+            metrics=['mse', 'mae']
+        )
+
         model.save(self.__modelFiles['model'])
+
+        return model
 
     def train(self):
         '''
         Train the recurrent neural network.
         '''
+
+        tuner = BayesianOptimization(
+            self.__build,
+            objective='val_loss',  # Minimize validation loss
+            max_trials=20,  # Number of hyperparameter combinations to try
+            directory='tuner_results',
+            project_name='opticoach_tuning'
+        )
 
         tX = load_pkl(self.__preprocessedFiles['trainX'])
         vX = load_pkl(self.__preprocessedFiles['validX'])
@@ -156,28 +181,44 @@ class OpticoachModel:
         tXS = split_features(tX)
         vXS = split_features(vX)
 
-        learningRateReducer = ReduceLROnPlateau(monitor='val_loss', factor=0.5, patience=3, min_lr=1e-6)
-        
-        model = load_model(self.__modelFiles['model'])
-        
-        model.compile(
-            optimizer=Adam(learning_rate=1e-2),
-            loss='mse',
-            metrics=['mse', 'mae']
+        # Perform the search
+        tuner.search(
+            tXS, tY,
+            validation_data=(vXS, vY),
+            epochs=50,
+            batch_size=16,
+            verbose=2
         )
 
-        model.fit(
+        # Get the best hyperparameters
+        best_hps = tuner.get_best_hyperparameters(num_trials=1)[0]
+        print(f"Best hyperparameters: {best_hps.values}")
+
+        # Build the best model using the best hyperparameters
+        best_model = tuner.hypermodel.build(best_hps)
+
+        # Define the learning rate reducer callback
+        learningRateReducer = ReduceLROnPlateau(
+            monitor='val_loss',  # Monitor validation loss
+            factor=0.5,          # Reduce learning rate by a factor of 0.5
+            patience=3,          # Wait for 3 epochs without improvement
+            min_lr=1e-6          # Minimum learning rate
+        )
+
+        # Train the best model with the learning rate reducer
+        best_model.fit(
             tXS, tY,
             batch_size=16,
             epochs=100,
             verbose=2,
-            callbacks=learningRateReducer,
+            callbacks=[learningRateReducer],  # Include the learning rate reducer
             validation_data=(vXS, vY)
         )
 
-        model.save(self.__modelFiles['model'])
+        # Save the trained model
+        best_model.save(self.__modelFiles['model'])
 
-        return
+        return 
 
     def predict(self):
         model = load_model(self.__modelFiles['model'])
