@@ -73,60 +73,61 @@ class OpticoachModel:
         # We first accept an input batch of coaches. For each coach, a time-ordered sequence of
         # coaching metrics will be provided. However, some of these metrics are categorical with
         # string values, and so embedding layers are necessary
-        numericalInputs, categoricalInputs, embeddings = [], [], []
+        inputLayers, numericalInputs, embeddingLayers = [], [], []
         for i, type in enumerate(XTypes):
             if type == str:
-                input = Input((self.__backgroundYears, ), name=f"input_{i}_cat")
-                categoricalInputs.append(input)
+                inputLayer = Input((self.__backgroundYears,), name=f"input_{i}_cat")
+                inputLayers.append(inputLayer)
                 categoryCount = len(unique(tX[:, :, i]))
-                embedding = Embedding(
+                embeddingLayer = Embedding(
                     categoryCount + 1,
                     min(50, (categoryCount + 1) // 2)
-                )(input)
-                embeddings.append(embedding)
+                )(inputLayer)
+                embeddingLayers.append(embeddingLayer)
             else:
-                input = Input((self.__backgroundYears, 1, ), name=f"input_{i}_num")
-                numericalInputs.append(input)
+                inputLayer = Input((self.__backgroundYears, 1), name=f"input_{i}_num")
+                inputLayers.append(inputLayer)
+                numericalInputs.append(inputLayer)
         
         numericalConcatenation = Concatenate()(numericalInputs) if numericalInputs else None
-        embeddingConcatenation = Concatenate()(embeddings) if embeddings else None
+        embeddingConcatenation = Concatenate()(embeddingLayers) if embeddingLayers else None
         
         if numericalConcatenation is not None and embeddingConcatenation is not None:
-            merged = Concatenate()([numericalConcatenation, embeddingConcatenation])
+            mergeConcatenation = Concatenate()([numericalConcatenation, embeddingConcatenation])
         else:
-            merged = numericalConcatenation or embeddingConcatenation
+            mergeConcatenation = numericalConcatenation or embeddingConcatenation
         
         # In order to accomodate gaps in the data, a masking is used to cover missing time steps 
         # and missing metrics. There will be gaps in the time sequence in which a coach was not 
         # a head coach, and gaps in the metrics if data is not available.
-        mask = Masking(mask_value=nan)(merged)
+        maskLayer = Masking(mask_value=nan)(mergeConcatenation)
         
         # In order to handle long-term dependencies we will utilize a Long Short Term-Memory (LSTM)
         # layer. Dropout and regularization are also supplemented in order to avoid overfitting.
         # We use chat's rule of thumb, lstm_units = min(128, max(32, features * 2)).
-        lstm = LSTM(
+        lstmLayer = LSTM(
             160,
             dropout=0.2,
             recurrent_dropout=0.2,
             kernel_regularizer='l2'
-        )(mask)
+        )(maskLayer)
         
         # In order to interpret the LSTM output, a Dense layer is added. Dropout is ommited
         # following this layer because that adds imprecision to regression tasks.
-        hidden = Dense(
+        hiddenLayer = Dense(
             64,
             activation='relu',
             kernel_regularizer='l2'
-        )(lstm)
+        )(lstmLayer)
         
         # Finally, a few key coaching success metrics are trained on and predicted. For the
         # purpose of precise regression, linear activation is used.
-        output = Dense(
+        outputLayer = Dense(
             len(tY[0][0]),
             activation='linear'
-        )(hidden)
+        )(hiddenLayer)
 
-        model = Model(inputs=input, outputs=output)
+        model = Model(inputs=inputLayers, outputs=outputLayer)
         model.save('files/model.keras')
         self.modelFiles['model'] = 'files/model.keras'
 
@@ -142,6 +143,9 @@ class OpticoachModel:
         XTypes = load_pkl(self.__preprocessedFiles['XTypes'])
         YTypes = load_pkl(self.__preprocessedFiles['YTypes'])
 
+        print(f"tX\n{tX}")
+        print(f"tY\n{tY}")
+
         '''
         xScaler, yScaler = MinMaxScaler(), MinMaxScaler()
 
@@ -156,14 +160,15 @@ class OpticoachModel:
         self.modelFiles['yScaler'] = 'files/yScaler.pkl'
         '''
 
-        def split_features(X, XTypes):
+        def split_features(X):
             xList = []
             for i in range(shape(X)[2]):
                 metric = X[:, :, i]
                 xList.append(metric[..., newaxis])
+            return xList
         
-        tXS = split_features(tX, XTypes)
-        vXS = split_features(vX, XTypes)
+        tXS = split_features(tX)
+        vXS = split_features(vX)
 
         learningRateReducer = ReduceLROnPlateau(monitor='val_loss', factor=0.5, patience=3, min_lr=1e-6)
         
@@ -175,6 +180,8 @@ class OpticoachModel:
             metrics=['mse', 'mae']
         )
         
+        print(f"tXS\n{tXS}")
+        print(f"tY\n{tY}")
         model.fit(
             tXS, tY,
             batch_size=16,

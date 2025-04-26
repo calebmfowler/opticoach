@@ -368,31 +368,32 @@ class Preprocessor:
                 
                 print(f"coach {i}, change {changeYear}, ({coach})")
                 XSample, YSample = [], []
-                for metric, metricType, background, foresight, prediction in zip(metrics, metricTypes, backgroundMask, foresightMask, predictionMask):
+                for metric, metricType, background, foresight, prediction in zip(
+                    metrics, metricTypes, backgroundMask, foresightMask, predictionMask
+                ):
                     backgroundMetric = list(Series(DataFrame(metric).loc[backgroundYears, coach]).values)
                     predictionMetric = list(Series(DataFrame(metric).loc[predictionYears, coach]).values)
 
-                    if background:
-                        if isinstance(backgroundMetric[0], list):
-                            for subMetric in [list(subMetric) for subMetric in zip(*backgroundMetric)]:
-                                XSample.append(subMetric)
-                        else:
+                    if isinstance(backgroundMetric[0], list):
+                        for subBackgroundMetric, subPredictionMetric, subMetricType, subBackground, subForesight, subPrediction in zip(
+                            [list(subMetric) for subMetric in zip(*backgroundMetric)],
+                            [list(subMetric) for subMetric in zip(*predictionMetric)],
+                            metricType, background, foresight, prediction
+                        ):
+                            if subBackground:
+                                XSample.append(subBackgroundMetric)
+                            if subForesight:
+                                foresightPadding = [subMetricType()] * (self.backgroundYears - self.predictionYears)
+                                XSample.append(foresightPadding + subPredictionMetric)
+                            if subPrediction:
+                                YSample.append(subPredictionMetric)
+                    else:
+                        if background:
                             XSample.append(backgroundMetric)
-                    
-                    if foresight:
-                        if isinstance(predictionMetric[0], list):
-                            for subMetric, subType in zip([list(subMetric) for subMetric in zip(*predictionMetric)], metricType):
-                                foresightPadding = [subType()] * (self.backgroundYears - self.predictionYears)
-                                XSample.append(foresightPadding + subMetric)
-                        else:
+                        if foresight:
                             foresightPadding = [metricType()] * (self.backgroundYears - self.predictionYears)
                             XSample.append(foresightPadding + predictionMetric)
-
-                    if prediction:
-                        if isinstance(predictionMetric[0], list):
-                            for subMetric in [list(subMetric) for subMetric in zip(*predictionMetric)]:
-                                YSample.append(subMetric)
-                        else:
+                        if prediction:
                             YSample.append(predictionMetric)
 
                 X.append(nparr(XSample).T)
