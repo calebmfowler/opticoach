@@ -1,7 +1,7 @@
 from copy import deepcopy
-from keras.src import Model
+from keras import Model
 from keras.src.callbacks import ReduceLROnPlateau
-from keras.src.layers import Input, Embedding, Concatenate, Masking, Lambda, LSTM, Dense, TextVectorization
+from keras.src.layers import Input, Embedding, Concatenate, Masking, Lambda, LSTM, Dense, TextVectorization, Normalization
 from keras._tf_keras.keras.models import load_model
 from keras.src.optimizers import Adam
 from numpy import array as nparr, isnan, isinf, nan, newaxis, shape, unique
@@ -93,11 +93,12 @@ class OpticoachModel:
                 numerizedLayers.append(inputLayer)
         
         numericalConcatenation = Concatenate()(numerizedLayers)
-        
+
+        normalizedLayer = Normalization()(numericalConcatenation)
         # In order to accomodate gaps in the data, a masking is used to cover missing time steps 
         # and missing metrics. There will be gaps in the time sequence in which a coach was not 
         # a head coach, and gaps in the metrics if data is not available.
-        maskLayer = Masking(mask_value=nan)(numericalConcatenation)
+        maskLayer = Masking(mask_value=nan)(normalizedLayer)
         
         # In order to handle long-term dependencies we will utilize a Long Short Term-Memory (LSTM)
         # layer. Dropout and regularization are also supplemented in order to avoid overfitting.
@@ -120,13 +121,16 @@ class OpticoachModel:
             activation='relu',
             kernel_regularizer='l2'
         )(slicedLayer)
+
+        # revert the normalization
+        unnormalizedLayer = Normalization(invert=True)(hiddenLayer)
         
         # Finally, a few key coaching success metrics are trained on and predicted. For the
         # purpose of precise regression, linear activation is used.
         outputLayer = Dense(
             len(tY[0][0]),
             activation='linear'
-        )(hiddenLayer)
+        )(unnormalizedLayer)
 
         model = Model(inputs=inputLayers, outputs=outputLayer)
         model.save(self.modelFiles['model'])
