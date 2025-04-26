@@ -4,7 +4,7 @@ from keras.src.callbacks import ReduceLROnPlateau
 from keras.src.layers import Input, Embedding, Concatenate, Masking, LSTM, Dense, TextVectorization
 from keras._tf_keras.keras.models import load_model
 from keras.src.optimizers import Adam
-from numpy import nan, newaxis, shape, unique
+from numpy import array as nparr, nan, newaxis, shape, unique
 from preprocess import Preprocessor
 from sklearn.preprocessing import MinMaxScaler
 from utilities import save_pkl, load_pkl
@@ -80,7 +80,7 @@ class OpticoachModel:
             if embed:
                 inputLayer = Input((self.__backgroundYears,), name=f"input_{i}_cat")
                 inputLayers.append(inputLayer)
-                vocabSize = len(vocabularies.pop(0))
+                vocabSize = len(vocabularies[i])
                 embeddingLayer = Embedding(
                     vocabSize + 1,
                     min(50, (vocabSize + 1) // 2)
@@ -141,12 +141,15 @@ class OpticoachModel:
         def split_features(X):
             xList = []
             for i, embed in enumerate(XEmbeds):
-                metric = X[:][:][i]
+                metric = X[:, :, i, newaxis]
                 xList.append(metric)
             return xList
         
         tXS = split_features(tX)
         vXS = split_features(vX)
+
+        print(f"tXS {shape(tXS)}\n{tXS}")
+        print(f"tY {shape(tY)}\n{tY}")
 
         learningRateReducer = ReduceLROnPlateau(monitor='val_loss', factor=0.5, patience=3, min_lr=1e-6)
         
@@ -157,7 +160,7 @@ class OpticoachModel:
             loss='mse',
             metrics=['mse', 'mae']
         )
-        
+
         model.fit(
             tXS, tY,
             batch_size=16,

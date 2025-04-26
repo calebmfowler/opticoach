@@ -2,7 +2,7 @@ from aggregate import Aggregator
 from copy import deepcopy
 from keras.src.layers import TextVectorization
 import numpy as np
-from numpy import array as nparr, insert, nan, shape, unique
+from numpy import array as nparr, hstack, insert, nan, shape, unique
 from pandas import DataFrame, Series, to_numeric
 from sklearn.model_selection import train_test_split
 from utilities import bound_data, load_json, recolumnate_df, save_pkl, serialize_dict, tabulate_dict
@@ -83,7 +83,7 @@ class Preprocessor:
             df.columns = df.columns.map(map)
             return df
 
-        def add_metric(metric, metricType, metricEmbed, background, foresight, prediction, map=None, name=None):
+        def add_metric(metric, metricType, metricEmbed, background, foresight, prediction, map=None, name=None, vocab=[]):
             if map:
                 metric = DataFrame(metric).map(map)
 
@@ -96,6 +96,7 @@ class Preprocessor:
             backgroundMask.append(background)
             foresightMask.append(foresight)
             predictionMask.append(prediction)
+            vocabularies.append(vocab)
 
             return metric
         
@@ -103,7 +104,7 @@ class Preprocessor:
 
         coachJSON = load_json('files/trimmed_coach_dictionary.json')
         schoolMapJSON = load_json('files/mapping_schools.json')
-        pollsJSON = load_json('files/polls.json')
+        pollsJSON = load_json('files/final_polls.json')
         recordsJSON = load_json('files/records.json')
 
         # === MAPS ===
@@ -279,42 +280,84 @@ class Preprocessor:
 
         # === METRICS COMPILATION ===
 
+        # --- Vocabulary Generation ---
+
         school_coach_year = tabulate(coachJSON, columnDepth=3, indexDepth=0, valueDepth=1)
         school_coach_year = school_coach_year.map(school_map)
-        schoolVocabulary = insert(unique(school_coach_year)[1:], 0, ['', '[UNK]'])
-        vocabularies.append(schoolVocabulary)
+        rank_school_year = tabulate(pollsJSON, columnDepth=(2, None), indexDepth=0, valueDepth=1)
+        rank_school_year = map_columns(rank_school_year, school_map)
+        record_school_year = tabulate(recordsJSON, columnDepth=0, indexDepth=1, valueDepth=(2, None))
+        record_school_year = map_columns(record_school_year, school_map)
+        schoolVocabulary = unique(hstack((unique(school_coach_year), rank_school_year.columns, record_school_year.columns)))
+        schoolVocabulary = insert(schoolVocabulary[1:], 0, ['', '[UNK]'])
+        print(f"len(schoolVocabulary) = {len(schoolVocabulary)}")
         schoolVectorization = TextVectorization(standardize=None, split=None, vocabulary=schoolVocabulary)
-        schoolInt_coach_year = DataFrame(
-            schoolVectorization(school_coach_year),
-            columns=school_coach_year.columns,
-            index=school_coach_year.index
-        )
-        schoolInt_coach_year = add_metric(schoolInt_coach_year, int, True, True, True, False, name="schoolInt_coach_year")
 
         role_coach_year = tabulate(coachJSON, columnDepth=3, indexDepth=0, valueDepth=2)
         role_coach_year = role_coach_year.map(role_map)
         roleTitle_coach_year = role_coach_year.map(role_title_map)
         roleTitleVocabulary = insert(unique(roleTitle_coach_year)[1:], 0, ['', '[UNK]'])
-        vocabularies.append(roleTitleVocabulary)
+        print(f"len(roleTitleVocabulary) = {len(roleTitleVocabulary)}")
         roleTitleVectorization = TextVectorization(standardize=None, split=None, vocabulary=roleTitleVocabulary)
+
+        # --- Metric Enumeration ---
+
+        schoolInt_coach_year = DataFrame(
+            schoolVectorization(school_coach_year),
+            columns=school_coach_year.columns,
+            index=school_coach_year.index
+        )
+        schoolInt_coach_year = add_metric(
+            schoolInt_coach_year,
+            int,
+            True,
+            True,
+            True,
+            False,
+            name="schoolInt_coach_year",
+            vocab=schoolVocabulary
+        )
+
         roleTitleInt_coach_year = DataFrame(
             roleTitleVectorization(roleTitle_coach_year),
             columns=roleTitle_coach_year.columns,
             index=roleTitle_coach_year.index
         )
-        roleTitleInt_coach_year = add_metric(roleTitleInt_coach_year, int, True, True, False, False, name="roleTitleInt_coach_year")
+        roleTitleInt_coach_year = add_metric(
+            roleTitleInt_coach_year,
+            int,
+            True,
+            True,
+            False,
+            False,
+            name="roleTitleInt_coach_year",
+            vocab=roleTitleVocabulary
+        )
 
         roleRank_coach_year = role_coach_year.map(role_rank_map)
-        roleRank_coach_year = add_metric(roleRank_coach_year, int, False, True, False, False, name="roleRank_coach_year")
+        roleRank_coach_year = add_metric(
+            roleRank_coach_year,
+            int,
+            False,
+            True,
+            False,
+            False,
+            name="roleRank_coach_year"
+        )
 
-        rank_school_year = tabulate(pollsJSON, columnDepth=(2, None), indexDepth=0, valueDepth=1)
         rank_school_year = rank_school_year.apply(to_numeric, errors='coerce')
-        rank_school_year = map_columns(rank_school_year, school_map)
         rank_coach_year = recolumnate(rank_school_year, school_coach_year)
-        rank_coach_year = add_metric(rank_coach_year, int, False, True, False, True, rank_map, "rank_coach_year")
+        rank_coach_year = add_metric(
+            rank_coach_year,
+            int,
+            False,
+            True,
+            False,
+            True,
+            rank_map,
+            "rank_coach_year"
+        )
 
-        record_school_year = tabulate(recordsJSON, columnDepth=0, indexDepth=1, valueDepth=(2, None))
-        record_school_year = map_columns(record_school_year, school_map)
         record_coach_year = recolumnate(record_school_year, school_coach_year)
         performance_coach_year = record_coach_year.apply(annual_performance_map, axis=1)
         performance_coach_year = add_metric(
@@ -331,7 +374,15 @@ class Preprocessor:
         winRate_coach_year = performance_coach_year.map(win_rate_map)
         avgOpponentWinRate_coach_year = record_coach_year.apply(annual_avg_opponent_win_rate_map, axis=1)
         sos_coach_year = record_coach_year.apply(annual_sos_map, axis=1)
-        sos_coach_year = add_metric(sos_coach_year, float, False, True, False, False, name="sos_coach_year")
+        sos_coach_year = add_metric(
+            sos_coach_year,
+            float,
+            False,
+            True,
+            False,
+            False,
+            name="sos_coach_year"
+        )
 
         save_pkl(vocabularies, self.preprocessedFiles['vocabularies'])
 
@@ -339,7 +390,7 @@ class Preprocessor:
 
         # --- Listing feature and label types ---
 
-        XTypes, XEmbeds, YTypes = [], [], []
+        XTypes, XEmbeds = [], []
 
         for i, metricType in enumerate(metricTypes):
             if isinstance(metricType, list):
@@ -350,17 +401,13 @@ class Preprocessor:
                     if foresightMask[i][j]:
                         XTypes.append(subMetricType)
                         XEmbeds.append(embedMask[i][j])
-                    if predictionMask[i][j]:
-                        YTypes.append(subMetricType)
-            else:   
+            else:
                 if backgroundMask[i]:
                     XTypes.append(metricType)
                     XEmbeds.append(embedMask[i])
                 if foresightMask[i]:
                     XTypes.append(metricType)
                     XEmbeds.append(embedMask[i])
-                if predictionMask[i]:
-                    YTypes.append(metricType)
         
         save_pkl(XEmbeds, self.preprocessedFiles['XEmbeds'])
 
@@ -422,6 +469,9 @@ class Preprocessor:
 
                 X.append([list(row) for row in zip(*XSample)])
                 Y.append([list(row) for row in zip(*YSample)])
+
+        X = nparr(X)
+        Y = nparr(Y)
 
         trainX, validX, trainY, validY = train_test_split(X, Y, test_size=0.2)
 
