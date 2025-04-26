@@ -47,7 +47,7 @@ class Preprocessor:
                 "validX" : "files/validX.pkl",
                 "validY" : "files/validY.pkl",
                 "XEmbeds" : "files/XEmbeds.pkl",
-                "vocabularies" : "files/vocabularies.pkl"
+                "XVocabs" : "files/XVocabs.pkl"
             }
             self.__aggregatedFiles = Aggregator(arg).aggregatedFiles
             self.startYear = startYear
@@ -83,7 +83,7 @@ class Preprocessor:
             df.columns = df.columns.map(map)
             return df
 
-        def add_metric(metric, metricType, metricEmbed, background, foresight, prediction, map=None, name=None, vocab=[]):
+        def add_metric(metric, metricType, metricEmbed, vocab, background, foresight, prediction, map=None, name=None):
             if map:
                 metric = DataFrame(metric).map(map)
 
@@ -119,7 +119,7 @@ class Preprocessor:
         
         def role_map(role):
             if role != role:
-                return ["", nan]
+                return ["", -1]
             else:
                 roleTitle = str(role)
                 i = roleTitle.find('/')
@@ -139,10 +139,10 @@ class Preprocessor:
             return role[1]
 
         def rank_map(num):
-            if num != num:
-                return 30
+            if isinstance(num, int):
+                return num
             else:
-                return int(num)
+                return 30
 
         def performance_map(record, year, coach):
             '''
@@ -150,7 +150,7 @@ class Preprocessor:
             scoring defense, win percentage, talent level, and strength of schedule.
             '''
             if record != record or record == []:
-                return [nan, nan, nan]
+                return [20, 30, 0.4]
             
             elif not isinstance(record[0], list):
                 game = record
@@ -238,7 +238,7 @@ class Preprocessor:
 
         def sos_map(record, year, coach):
             if record != record or record == []:
-                return nan
+                return 0.4
             
             teamSos = avgOpponentWinRate_coach_year.at[year, coach]
 
@@ -311,11 +311,11 @@ class Preprocessor:
             schoolInt_coach_year,
             int,
             True,
+            schoolVocabulary,
             True,
             True,
             False,
-            name="schoolInt_coach_year",
-            vocab=schoolVocabulary
+            name="schoolInt_coach_year"
         )
 
         roleTitleInt_coach_year = DataFrame(
@@ -327,18 +327,19 @@ class Preprocessor:
             roleTitleInt_coach_year,
             int,
             True,
+            roleTitleVocabulary,
             True,
             False,
             False,
-            name="roleTitleInt_coach_year",
-            vocab=roleTitleVocabulary
+            name="roleTitleInt_coach_year"
         )
 
         roleRank_coach_year = role_coach_year.map(role_rank_map)
         roleRank_coach_year = add_metric(
             roleRank_coach_year,
             int,
-            False,
+            True,
+            [-1, 0, 1, 2],
             True,
             False,
             False,
@@ -351,6 +352,7 @@ class Preprocessor:
             rank_coach_year,
             int,
             False,
+            [],
             True,
             False,
             True,
@@ -364,6 +366,7 @@ class Preprocessor:
             performance_coach_year,
             [float, float, float],              # metricType
             [False, False, False],              # metricEmbed
+            [[], [], []],                       # vocabularies
             [True, True, True],                 # backgroundMask
             [False, False, False],              # foresightMask
             [False, False, True],               # predictionMask
@@ -378,19 +381,18 @@ class Preprocessor:
             sos_coach_year,
             float,
             False,
+            [],
             True,
             False,
             False,
             name="sos_coach_year"
         )
 
-        save_pkl(vocabularies, self.preprocessedFiles['vocabularies'])
-
         # === PACKAGING METRICS ===
 
         # --- Listing feature and label types ---
 
-        XTypes, XEmbeds = [], []
+        XTypes, XEmbeds, XVocabs = [], [], []
 
         for i, metricType in enumerate(metricTypes):
             if isinstance(metricType, list):
@@ -398,18 +400,23 @@ class Preprocessor:
                     if backgroundMask[i][j]:
                         XTypes.append(subMetricType)
                         XEmbeds.append(embedMask[i][j])
+                        XVocabs.append(vocabularies[i][j])
                     if foresightMask[i][j]:
                         XTypes.append(subMetricType)
                         XEmbeds.append(embedMask[i][j])
+                        XVocabs.append(vocabularies[i][j])
             else:
                 if backgroundMask[i]:
                     XTypes.append(metricType)
                     XEmbeds.append(embedMask[i])
+                    XVocabs.append(vocabularies[i])
                 if foresightMask[i]:
                     XTypes.append(metricType)
                     XEmbeds.append(embedMask[i])
+                    XVocabs.append(vocabularies[i])
         
         save_pkl(XEmbeds, self.preprocessedFiles['XEmbeds'])
+        save_pkl(XVocabs, self.preprocessedFiles['XVocabs'])
 
         # --- Compiling features and labels ---
 

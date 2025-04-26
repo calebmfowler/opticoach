@@ -4,7 +4,7 @@ files/trainY.pkl
 files/validX.pkl
 files/validY.pkl
 files/XEmbeds.pkl
-files/vocabularies.pkl
+files/XVocabs.pkl
 files/model.keras
 files/trainP.pkl
 files/validP.pkl

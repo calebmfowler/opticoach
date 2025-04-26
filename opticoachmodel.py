@@ -1,12 +1,12 @@
 from copy import deepcopy
 from keras.src import Model
 from keras.src.callbacks import ReduceLROnPlateau
-from keras.src.layers import Input, Embedding, Concatenate, Masking, LSTM, Dense, TextVectorization
+from keras.src.layers import Input, Embedding, Concatenate, Masking, Lambda, LSTM, Dense, TextVectorization
 from keras._tf_keras.keras.models import load_model
 from keras.src.optimizers import Adam
-from numpy import array as nparr, nan, newaxis, shape, unique
+from numpy import array as nparr, isnan, isinf, nan, newaxis, shape, unique
 from preprocess import Preprocessor
-from sklearn.preprocessing import MinMaxScaler
+from slicer import Slicer
 from utilities import save_pkl, load_pkl
 
 class OpticoachModel:
@@ -70,7 +70,7 @@ class OpticoachModel:
         
         tY = load_pkl(self.__preprocessedFiles['trainY'])
         XEmbeds = load_pkl(self.__preprocessedFiles['XEmbeds'])
-        vocabularies = load_pkl(self.__preprocessedFiles['vocabularies'])
+        XVocabs = load_pkl(self.__preprocessedFiles['XVocabs'])
 
         # We first accept an input batch of coaches. For each coach, a time-ordered sequence of
         # coaching metrics will be provided. However, some of these metrics are categorical with
@@ -80,7 +80,8 @@ class OpticoachModel:
             if embed:
                 inputLayer = Input((self.__backgroundYears,), name=f"input_{i}_cat")
                 inputLayers.append(inputLayer)
-                vocabSize = len(vocabularies[i])
+                vocabSize = len(XVocabs[i])
+                print(f"vocabSize_{i} = {vocabSize}")
                 embeddingLayer = Embedding(
                     vocabSize + 1,
                     min(50, (vocabSize + 1) // 2)
@@ -105,16 +106,20 @@ class OpticoachModel:
             160,
             dropout=0.2,
             recurrent_dropout=0.2,
-            kernel_regularizer='l2'
+            kernel_regularizer='l2',
+            return_sequences=True  # Ensure the LSTM outputs sequences for each time step
         )(maskLayer)
-        
-        # In order to interpret the LSTM output, a Dense layer is added. Dropout is ommited
+
+        # Slice the LSTM output to keep only the last 5 time steps
+        slicedLayer = Slicer(num_steps=5)(lstmLayer)
+
+        # In order to interpret the LSTM output, a Dense layer is added. Dropout is omitted
         # following this layer because that adds imprecision to regression tasks.
         hiddenLayer = Dense(
             64,
             activation='relu',
             kernel_regularizer='l2'
-        )(lstmLayer)
+        )(slicedLayer)
         
         # Finally, a few key coaching success metrics are trained on and predicted. For the
         # purpose of precise regression, linear activation is used.
@@ -136,7 +141,11 @@ class OpticoachModel:
         tY = load_pkl(self.__preprocessedFiles['trainY'])
         vY = load_pkl(self.__preprocessedFiles['validY'])
         XEmbeds = load_pkl(self.__preprocessedFiles['XEmbeds'])
-        vocabularies = load_pkl(self.__preprocessedFiles['vocabularies'])
+
+        print("NaN in tX:", isnan(tX).any())
+        print("NaN in tY:", isnan(tY).any())
+        print("NaN in vX:", isnan(vX).any())
+        print("NaN in vY:", isnan(vY).any())
 
         def split_features(X):
             xList = []
@@ -147,9 +156,6 @@ class OpticoachModel:
         
         tXS = split_features(tX)
         vXS = split_features(vX)
-
-        print(f"tXS {shape(tXS)}\n{tXS}")
-        print(f"tY {shape(tY)}\n{tY}")
 
         learningRateReducer = ReduceLROnPlateau(monitor='val_loss', factor=0.5, patience=3, min_lr=1e-6)
         
@@ -175,13 +181,26 @@ class OpticoachModel:
         return
 
     def predict(self):
-        model = Model(load_pkl(self.modelFiles['model']))
+        model = load_model(self.modelFiles['model'])
 
         tX = load_pkl(self.__preprocessedFiles['trainX'])
         vX = load_pkl(self.__preprocessedFiles['validX'])
+        tY = load_pkl(self.__preprocessedFiles['trainY'])
+        vY = load_pkl(self.__preprocessedFiles['validY'])
+        XEmbeds = load_pkl(self.__preprocessedFiles['XEmbeds'])
 
-        tP = model.predict(tX)
-        vP = model.predict(vX)
+        def split_features(X):
+            xList = []
+            for i, embed in enumerate(XEmbeds):
+                metric = X[:, :, i, newaxis]
+                xList.append(metric)
+            return xList
+
+        tXS = split_features(tX)
+        vXS = split_features(vX)
+
+        tP = model.predict(tXS)
+        vP = model.predict(vXS)
 
         save_pkl(tP, self.modelFiles['trainP'])
         save_pkl(vP, self.modelFiles['validP'])
