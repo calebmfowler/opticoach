@@ -2,7 +2,7 @@ from aggregate import Aggregator
 from copy import deepcopy
 from keras.src.layers import TextVectorization
 import numpy as np
-from numpy import array as nparr, nan, shape, unique
+from numpy import array as nparr, insert, nan, shape, unique
 from pandas import DataFrame, Series, to_numeric
 from sklearn.model_selection import train_test_split
 from utilities import bound_data, load_json, recolumnate_df, save_pkl, serialize_dict, tabulate_dict
@@ -281,7 +281,7 @@ class Preprocessor:
 
         school_coach_year = tabulate(coachJSON, columnDepth=3, indexDepth=0, valueDepth=1)
         school_coach_year = school_coach_year.map(school_map)
-        schoolVocabulary = unique(school_coach_year)
+        schoolVocabulary = insert(unique(school_coach_year)[1:], 0, ['', '[UNK]'])
         vocabularies.append(schoolVocabulary)
         schoolVectorization = TextVectorization(standardize=None, split=None, vocabulary=schoolVocabulary)
         schoolInt_coach_year = schoolVectorization(school_coach_year)
@@ -290,7 +290,7 @@ class Preprocessor:
         role_coach_year = tabulate(coachJSON, columnDepth=3, indexDepth=0, valueDepth=2)
         role_coach_year = role_coach_year.map(role_map)
         roleTitle_coach_year = role_coach_year.map(role_title_map)
-        roleTitleVocabulary = unique(roleTitle_coach_year)
+        roleTitleVocabulary = insert(unique(roleTitle_coach_year)[1:], 0, ['', '[UNK]'])
         vocabularies.append(roleTitleVocabulary)
         roleTitleVectorization = TextVectorization(standardize=None, split=None, vocabulary=roleTitleVocabulary)
         roleTitleInt_coach_year = roleTitleVectorization(roleTitle_coach_year)
