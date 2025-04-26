@@ -1,9 +1,8 @@
 from aggregate import Aggregator
 from copy import deepcopy
 import numpy as np
-from numpy import array as nparr, nan, unique
+from numpy import array as nparr, nan, shape, unique
 from pandas import DataFrame, Series, to_numeric
-from recordUtilities import BCS_sos, total_talent, success_level
 from sklearn.model_selection import train_test_split
 from utilities import bound_data, load_json, recolumnate_df, save_pkl, serialize_dict, tabulate_dict
 
@@ -71,6 +70,7 @@ class Preprocessor:
         metrics, metricTypes, backgroundMask, foresightMask, predictionMask = [], [], [], [], []
 
         # === UTILITIES ===
+
         bound_years = lambda data : bound_data(data, self.startYear, self.endYear)
 
         tabulate = lambda *args, **kwargs : DataFrame(bound_years(tabulate_dict(*args, **kwargs)))
@@ -79,33 +79,35 @@ class Preprocessor:
 
         recolumnate = lambda *args, **kwargs : DataFrame(bound_years(recolumnate_df(*args, **kwargs)))
 
-        map_columns = lambda df, map : DataFrame(df).columns.map(map)
+        def map_columns(df, map):
+            df = DataFrame(df)
+            df.columns = df.columns.map(map)
+            return df
 
-        def add_metric(metric, type, backgroundInclusion, foresightInclusion, predictionInclusion, map=None, name=None):
+        def add_metric(metric, metricType, backgroundInclusion, foresightInclusion, predictionInclusion, map=None, name=None):
             if map:
                 metric = DataFrame(metric).map(map)
+
             if name:
                 print(f"{name}\n{metric}")
+            
             metrics.append(metric)
-            metricTypes.append(type)
+            metricTypes.append(metricType)
             backgroundMask.append(backgroundInclusion)
             foresightMask.append(foresightInclusion)
             predictionMask.append(predictionInclusion)
+
+            return metric
         
         # === FILE IMPORTS ===
+
         coachJSON = load_json('files/trimmed_coach_dictionary.json')
         schoolMapJSON = load_json('files/mapping_schools.json')
         pollsJSON = load_json('files/polls.json')
         recordsJSON = load_json('files/records.json')
-        mascotsJSON = load_json('files/total_no_mascots_inv.json')
-        rostersJSON = load_json('files/rosters.json')
-        school_links = load_json('files/school_links.json')
-        DII_links = load_json('files/DII_links.json')
-        DIII_links = load_json('files/DIII_links.json')
-        naia_links = load_json('files/naia_links.json')
-        FCS_links = load_json('files/FCS_links.json')
 
         # === MAPS ===
+
         def school_map(school):
             if school != school:
                 return ""
@@ -134,22 +136,19 @@ class Preprocessor:
                 return 30
             else:
                 return int(num)
-            
-        def record_map(record, year, coach):
+
+        def performance_map(record, year, coach):
             '''this function returns a list of statistical features for a given coach in a given year. It includes scoring offense,
             scoring defense, win percentage, talent level, and strength of schedule.'''
-            if record != record:
-                return []
+            if record != record or record == []:
+                return [nan, nan, nan]
             else:
-                print("record\n", record)
                 gameCount = len(record)
                 scoringOffense = []
                 scoringDefense = []
                 winCount = 0.
                 for game in record:
-                    print("game\n", game)
                     score = str(game[1]).split('-')
-                    print("score\n", score)
                     offense, defense = int(score[0]), int(score[1])
                     scoringOffense.append(offense)
                     scoringDefense.append(defense)
@@ -160,59 +159,128 @@ class Preprocessor:
                 scoringOffense = sum(nparr(scoringOffense)) / gameCount
                 scoringDefense = sum(nparr(scoringDefense)) / gameCount
                 winRate = winCount / gameCount
-                school = school_coach_year.at(year, coach)
-                strengthOfSchedule = BCS_sos(school, year)
-                teamTalent = total_talent(school, year)
-                # coachingSuccess = success_level(year, school)
-                return [scoringOffense, scoringDefense, winRate, strengthOfSchedule, teamTalent]
+                school = school_coach_year.at[year, coach]
 
-        def annual_record_map(season):
+                return [scoringOffense, scoringDefense, winRate]
+
+        def annual_performance_map(season):
             season = Series(season)
             year = int(season.name)
             recordFeaturesDict = {}
             for coach in season.index:
-                recordFeaturesDict[coach] = record_map(season[coach], year, coach)
+                recordFeaturesDict[coach] = performance_map(season[coach], year, coach)
             return Series(recordFeaturesDict)
 
+        def win_rate_map(record):
+            return record[2]
+
+        def avg_opponent_win_rate_map(record, year):
+            gameCount = len(record)
+            avgOpponentWinRate = 0
+            for game in record:
+                opponentSchool = str(game[0])
+                opponentCoach = coach_school_year.at[year, opponentSchool]
+                avgOpponentWinRate += winRate_coach_year.at[year, opponentCoach]
+            avgOpponentWinRate /= gameCount
+            return avgOpponentWinRate
+        
+        def annual_avg_opponent_win_rate_map(season):
+            season = Series(season)
+            year = int(season.name)
+            recordFeaturesDict = {}
+            for coach in season.index:
+                recordFeaturesDict[coach] = avg_opponent_win_rate_map(season[coach], year)
+            return Series(recordFeaturesDict)
+
+        def sos_map(record, year, coach):
+            teamSos = avgOpponentWinRate_coach_year.at[year, coach]
+
+            avgOpponentSos = 0
+            for game in record:
+                opponentSchool = str(game[0])
+                opponentCoach = coach_school_year.at[year, opponentSchool]
+                avgOpponentSos += avgOpponentWinRate_coach_year.at[year, opponentCoach]
+            
+            return 2/3 * teamSos + 1/3 * avgOpponentSos
+
+        def annual_sos_map(season):
+            season = Series(season)
+            year = int(season.name)
+            sosDict = {}
+            for coach in season.index:
+                sosDict[coach] = sos_map(season[coach], year, coach)
+
         # === METRICS COMPILATION ===
+
         school_coach_year = tabulate(coachJSON, columnDepth=3, indexDepth=0, valueDepth=1)
-        add_metric(school_coach_year, str, True, True, False, school_map, "school_coach_year")
+        school_coach_year = add_metric(school_coach_year, str, True, True, False, school_map, "school_coach_year")
         
         role_coach_year = tabulate(coachJSON, columnDepth=3, indexDepth=0, valueDepth=2)
-        add_metric(role_coach_year, [str, int], [True, True], [False, False], [False, False], role_map, "role_coach_year")
+        role_coach_year = add_metric(
+            role_coach_year,
+            [str, int],
+            [True, True],
+            [False, False],
+            [False, False],
+            role_map,
+            "role_coach_year"
+        )
         
         rank_school_year = tabulate(pollsJSON, columnDepth=(2, None), indexDepth=0, valueDepth=1)
         rank_school_year = rank_school_year.apply(to_numeric, errors='coerce')
-        map_columns(rank_school_year, school_map)
+        rank_school_year = map_columns(rank_school_year, school_map)
         rank_coach_year = recolumnate(rank_school_year, school_coach_year)
-        add_metric(rank_coach_year, int, True, False, True, rank_map, "rank_coach_year")
+        rank_coach_year = add_metric(rank_coach_year, int, True, False, True, rank_map, "rank_coach_year")
 
         record_school_year = tabulate(recordsJSON, columnDepth=0, indexDepth=1, valueDepth=(2, None))
         record_school_year = map_columns(record_school_year, school_map)
         record_coach_year = recolumnate(record_school_year, school_coach_year)
-        record_coach_year = record_coach_year.apply(annual_record_map, axis=1)
-        add_metric(
-            record_coach_year,
-            [float, float, float, float, float, float],
-            [True, True, True, True, True],
-            [False, False, False, False, False],
-            [False, False, True, False, False],
+        performance_coach_year = record_coach_year.apply(annual_performance_map, axis=1)
+        performance_coach_year = add_metric(
+            performance_coach_year,
+            [float, float, float],
+            [True, True, True],
+            [False, False, False],
+            [False, False, True],
             name="record_coach_year"
         )
 
+        coach_school_year = tabulate(coachJSON, columnDepth=1, indexDepth=0, valueDepth=3)
+        winRate_coach_year = performance_coach_year.map(win_rate_map)
+        avgOpponentWinRate_coach_year = record_coach_year.apply(annual_avg_opponent_win_rate_map, axis=1)
+        sos_coach_year = record_coach_year.apply(annual_sos_map, axis=1)
+        sos_coach_year = add_metric(sos_coach_year, float, True, False, False, name="sos_coach_year")
+
         # === PACKAGING METRICS ===
+
         # --- Listing feature and label types ---
+
         XTypes, YTypes = [], []
-        for type, background, foresight, prediction in zip(metricTypes, backgroundMask, foresightMask, predictionMask):
-            if background:
-                XTypes.append(type)
-            if foresight:
-                XTypes.append(type)
-            if prediction:
-                YTypes.append(type)
+
+        for metricType, background, foresight, prediction in zip(metricTypes, backgroundMask, foresightMask, predictionMask):
+            if isinstance(metricType, list):
+                for subMetricType, subBackground, subForesight, subPrediction in zip(metricType, background, foresight, prediction):
+                    if subBackground:
+                        XTypes.append(subMetricType)
+                    if subForesight:
+                        XTypes.append(subMetricType)
+                    if subPrediction:
+                        YTypes.append(subMetricType)
+            else:   
+                if background:
+                    XTypes.append(metricType)
+                if foresight:
+                    XTypes.append(metricType)
+                if prediction:
+                    YTypes.append(metricType)
+        
+        save_pkl(XTypes, "files/XTypes.pkl")
+        save_pkl(YTypes, "files/YTypes.pkl")
 
         # --- Compiling features and labels ---
+
         X, Y = [], []
+
         for i, coach in enumerate(school_coach_year.columns):
 
             schools = school_coach_year[coach]
@@ -238,7 +306,7 @@ class Preprocessor:
                 
                 print(f"coach {i}, change {changeYear}, ({coach})")
                 XElement, YElement = [], []
-                for metric, type, background, foresight, prediction in zip(metrics, metricTypes, backgroundMask, foresightMask, predictionMask):
+                for metric, metricType, background, foresight, prediction in zip(metrics, metricTypes, backgroundMask, foresightMask, predictionMask):
                     backgroundMetric = list(Series(DataFrame(metric).loc[backgroundYears, coach]).values)
                     predictionMetric = list(Series(DataFrame(metric).loc[predictionYears, coach]).values)
 
@@ -251,11 +319,11 @@ class Preprocessor:
                     
                     if foresight:
                         if isinstance(predictionMetric[0], list):
-                            for subMetric, subType in zip([list(subMetric) for subMetric in zip(*predictionMetric)], type):
+                            for subMetric, subType in zip([list(subMetric) for subMetric in zip(*predictionMetric)], metricType):
                                 foresightPadding = [subType()] * (self.backgroundYears - self.predictionYears)
                                 XElement.append(foresightPadding + subMetric)
                         else:
-                            foresightPadding = [type()] * (self.backgroundYears - self.predictionYears)
+                            foresightPadding = [metricType()] * (self.backgroundYears - self.predictionYears)
                             XElement.append(foresightPadding + predictionMetric)
 
                     if prediction:
@@ -270,12 +338,13 @@ class Preprocessor:
 
         X = nparr(X)
         Y = nparr(Y)
+        print(f"X (shape = {shape(X)})\n{X}")
+        print(f"Y (shape = {shape(Y)})\n{Y}")
 
         trainX, validX, trainY, validY = train_test_split(X, Y, test_size=0.2)
+
         save_pkl(trainX, "files/trainX.pkl")
         save_pkl(validX, "files/validX.pkl")
         save_pkl(trainY, "files/trainY.pkl")
         save_pkl(validY, "files/validY.pkl")
-        save_pkl(XTypes, "files/XTypes.pkl")
-        save_pkl(YTypes, "files/YTypes.pkl")
         return

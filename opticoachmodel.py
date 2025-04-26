@@ -90,7 +90,7 @@ class OpticoachModel:
         
         numericalConcatenation = Concatenate()(numericalInputs) if numericalInputs else None
         embeddingConcatenation = Concatenate()(embeddings) if embeddings else None
-        print(numericalConcatenation)
+        
         if numericalConcatenation is not None and embeddingConcatenation is not None:
             merged = Concatenate()([numericalConcatenation, embeddingConcatenation])
         else:
