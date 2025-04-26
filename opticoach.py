@@ -7,10 +7,10 @@ from postprocess import Postprocessor
 
 aggregator = Aggregator()
 # aggregator.aggregate()
-preprocessor = Preprocessor(aggregator, 2000, 2024, 15, 5)
+preprocessor = Preprocessor(aggregator, 1980, 2024, 15, 5)
 preprocessor.preprocess()
 model = OpticoachModel(preprocessor)
 model.train()
 model.predict()
-# postprocessor = Postprocessor(preprocessor, model)
-# postprocessor.postprocess()
+postprocessor = Postprocessor(preprocessor, model)
+postprocessor.postprocess()
