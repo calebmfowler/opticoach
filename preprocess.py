@@ -156,14 +156,12 @@ class Preprocessor:
                 return [offense, defense, win]
             
             else:
-                print(f"record\n{record}")
                 gameCount = len(record)
                 scoringOffense = 0.
                 scoringDefense = 0.
                 winRate = 0.
 
                 for game in record:
-                    print(f"game\n{game}")
                     score = str(game[1]).split('-')
                     offense, defense = int(score[0]), int(score[1])
                     scoringOffense += offense
@@ -191,14 +189,35 @@ class Preprocessor:
             return record[2]
 
         def avg_opponent_win_rate_map(record, year):
-            gameCount = len(record)
-            avgOpponentWinRate = 0
-            for game in record:
+            if record != record or record == []:
+                return 0.5
+            
+            elif not isinstance(record[0], list):
+                game = record
                 opponentSchool = str(game[0])
+                if not opponentSchool in coach_school_year.columns:
+                    return 0.5
                 opponentCoach = coach_school_year.at[year, opponentSchool]
-                avgOpponentWinRate += winRate_coach_year.at[year, opponentCoach]
-            avgOpponentWinRate /= gameCount
-            return avgOpponentWinRate
+                if not opponentCoach in winRate_coach_year.columns:
+                    return 0.5
+                avgOpponentWinRate = winRate_coach_year.at[year, opponentCoach]
+                return avgOpponentWinRate
+
+            else:
+                gameCount = len(record)
+                avgOpponentWinRate = 0
+                for game in record:
+                    opponentSchool = str(game[0])
+                    if not opponentSchool in coach_school_year.columns:
+                        avgOpponentWinRate += 0.5
+                        continue
+                    opponentCoach = coach_school_year.at[year, opponentSchool]
+                    if not opponentCoach in winRate_coach_year.columns:
+                        avgOpponentWinRate += 0.5
+                        continue
+                    avgOpponentWinRate += winRate_coach_year.at[year, opponentCoach]
+                avgOpponentWinRate /= gameCount
+                return avgOpponentWinRate
         
         def annual_avg_opponent_win_rate_map(season):
             season = Series(season)
