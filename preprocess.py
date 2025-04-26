@@ -190,16 +190,16 @@ class Preprocessor:
 
         def avg_opponent_win_rate_map(record, year):
             if record != record or record == []:
-                return 0.5
+                return 0.4
             
             elif not isinstance(record[0], list):
                 game = record
                 opponentSchool = str(game[0])
                 if not opponentSchool in coach_school_year.columns:
-                    return 0.5
+                    return 0.4
                 opponentCoach = coach_school_year.at[year, opponentSchool]
                 if not opponentCoach in winRate_coach_year.columns:
-                    return 0.5
+                    return 0.4
                 avgOpponentWinRate = winRate_coach_year.at[year, opponentCoach]
                 return avgOpponentWinRate
 
@@ -209,11 +209,11 @@ class Preprocessor:
                 for game in record:
                     opponentSchool = str(game[0])
                     if not opponentSchool in coach_school_year.columns:
-                        avgOpponentWinRate += 0.5
+                        avgOpponentWinRate += 0.4
                         continue
                     opponentCoach = coach_school_year.at[year, opponentSchool]
                     if not opponentCoach in winRate_coach_year.columns:
-                        avgOpponentWinRate += 0.5
+                        avgOpponentWinRate += 0.4
                         continue
                     avgOpponentWinRate += winRate_coach_year.at[year, opponentCoach]
                 avgOpponentWinRate /= gameCount
@@ -228,14 +228,37 @@ class Preprocessor:
             return Series(recordFeaturesDict)
 
         def sos_map(record, year, coach):
+            if record != record or record == []:
+                return nan
+            
             teamSos = avgOpponentWinRate_coach_year.at[year, coach]
 
             avgOpponentSos = 0
-            for game in record:
+            if not isinstance(record[0], list):
+                game = record
                 opponentSchool = str(game[0])
-                opponentCoach = coach_school_year.at[year, opponentSchool]
-                avgOpponentSos += avgOpponentWinRate_coach_year.at[year, opponentCoach]
-            
+                if not opponentSchool in coach_school_year.columns:
+                    avgOpponentSos = 0.4
+                else:
+                    opponentCoach = coach_school_year.at[year, opponentSchool]
+                    if not opponentCoach in winRate_coach_year.columns:
+                        avgOpponentSos = 0.4
+                    else:
+                        avgOpponentSos = avgOpponentWinRate_coach_year.at[year, opponentCoach]
+            else:
+                gameCount = len(record)
+                for game in record:
+                    opponentSchool = str(game[0])
+                    if not opponentSchool in coach_school_year.columns:
+                        avgOpponentSos += 0.4
+                        continue
+                    opponentCoach = coach_school_year.at[year, opponentSchool]
+                    if not opponentCoach in winRate_coach_year.columns:
+                        avgOpponentSos += 0.4
+                        continue
+                    avgOpponentSos += avgOpponentWinRate_coach_year.at[year, opponentCoach]
+                avgOpponentSos /= gameCount
+                
             return 2/3 * teamSos + 1/3 * avgOpponentSos
 
         def annual_sos_map(season):
@@ -244,6 +267,7 @@ class Preprocessor:
             sosDict = {}
             for coach in season.index:
                 sosDict[coach] = sos_map(season[coach], year, coach)
+            return Series(sosDict)
 
         # === METRICS COMPILATION ===
 
@@ -282,8 +306,11 @@ class Preprocessor:
 
         coach_school_year = tabulate(coachJSON, columnDepth=1, indexDepth=0, valueDepth=3)
         winRate_coach_year = performance_coach_year.map(win_rate_map)
+        print(f"winRate_coach_year\n{winRate_coach_year}")
         avgOpponentWinRate_coach_year = record_coach_year.apply(annual_avg_opponent_win_rate_map, axis=1)
+        print(f"avgOpponentWinRate_coach_year\n{avgOpponentWinRate_coach_year}")
         sos_coach_year = record_coach_year.apply(annual_sos_map, axis=1)
+        print(f"sos_coach_year\n{sos_coach_year}")
         sos_coach_year = add_metric(sos_coach_year, float, True, False, False, name="sos_coach_year")
 
         # === PACKAGING METRICS ===
