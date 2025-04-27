@@ -111,8 +111,8 @@ class OpticoachModel:
             return_sequences=True  # Ensure the LSTM outputs sequences for each time step
         )(maskLayer)
 
-        # Slice the LSTM output to keep only the last 5 time steps
-        slicedLayer = Slicer(num_steps=5)(lstmLayer)
+        # Slice the LSTM output to keep only the last 3 time steps
+        slicedLayer = Slicer(num_steps=3)(lstmLayer)
 
         # In order to interpret the LSTM output, a Dense layer is added. Dropout is omitted
         # following this layer because that adds imprecision to regression tasks.
