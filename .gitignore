@@ -8,3 +8,4 @@ files/XVocabs.pkl
 files/model.keras
 files/trainP.pkl
 files/validP.pkl
+tuner_results

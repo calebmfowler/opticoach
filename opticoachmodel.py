@@ -158,7 +158,7 @@ class OpticoachModel:
         tuner = BayesianOptimization(
             self.__build,
             objective='val_loss',  # Minimize validation loss
-            max_trials=20,  # Number of hyperparameter combinations to try
+            max_trials=10,  # Number of hyperparameter combinations to try
             directory='tuner_results',
             project_name='opticoach_tuning'
         )
