@@ -472,9 +472,8 @@ class Preprocessor:
             name="roleTitleInt_coach_year"
         )
 
-        roleRank_coach_year = role_coach_year.map(role_rank_map)
         roleRank_coach_year = add_metric( # x3
-            roleRank_coach_year,
+            role_coach_year,
             int,
             -1,
             True,
@@ -482,6 +481,7 @@ class Preprocessor:
             True,
             False,
             False,
+            map=role_rank_map,
             name="roleRank_coach_year"
         )
 
@@ -556,6 +556,13 @@ class Preprocessor:
             False,
             name='talent_coach_year'
         )
+
+        level_coach_year = add_metric(
+            school_coach_year,
+            int,
+            
+        )
+        
         
         # success_coach_year = winRate_coach_year * sos_coach_year
         # success_coach_year = add_metric(
@@ -603,7 +610,7 @@ class Preprocessor:
         # --- Compiling features and labels ---
 
         X, Y = [], []
-        relevantSchools = Series(list(d1_links.keys()) + list(d2_links.keys())).map(school_map).values
+        relevantSchools = Series(list(d1_links.keys()) + list(fcs_links.keys()) + list(d2_links.keys())).map(school_map).values
         testCoaches = ['Jimbo Fisher', 'Mike Elko', 'Nick Saban']
 
         for i, coach in enumerate(school_coach_year.columns):

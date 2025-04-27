@@ -1,6 +1,6 @@
 from copy import deepcopy
 from keras import Model
-from keras.src.callbacks import ReduceLROnPlateau
+from keras.src.callbacks import ReduceLROnPlateau, EarlyStopping
 from keras.src.layers import Input, Embedding, Concatenate, Masking, Lambda, LSTM, Dense, TextVectorization, Normalization
 from keras._tf_keras.keras.models import load_model
 from keras.src.optimizers import Adam
@@ -107,7 +107,7 @@ class OpticoachModel:
         lstmLayer = LSTM(
             128,
             dropout=0.3,
-            recurrent_dropout=0.25,
+            recurrent_dropout=0.3,
             kernel_regularizer='l2',
             return_sequences=True  # Ensure the LSTM outputs sequences for each time step
         )(normalizedLayer)
@@ -157,7 +157,9 @@ class OpticoachModel:
         tXS = split_features(tX)
         vXS = split_features(vX)
 
-        learningRateReducer = ReduceLROnPlateau(monitor='val_loss', factor=0.5, patience=3, min_lr=1e-6)
+        learningRateReducer = ReduceLROnPlateau(monitor='val_loss', factor=0.5, patience=5, min_lr=1e-6)
+
+        earlyStopping = EarlyStopping(monitor='val_loss', patience=5, restore_best_weights=True)
         
         model = load_model(self.__modelFiles['model'])
         
@@ -170,9 +172,9 @@ class OpticoachModel:
         model.fit(
             tXS, tY,
             batch_size=8,
-            epochs=50,
+            epochs=100,
             verbose=2,
-            callbacks=learningRateReducer,
+            callbacks=[learningRateReducer, earlyStopping],
             validation_data=(vXS, vY)
         )
 
