@@ -212,7 +212,7 @@ class Preprocessor:
                     roleTitle = roleTitle[:i]
                 if roleTitle == 'HC':
                     return [roleTitle, 0]
-                elif roleTitle in ['OC', 'DC']:
+                elif roleTitle in ['OC', 'DC', 'ST', 'PGC', 'RGC']:
                     return [roleTitle, 1]
                 else:
                     return [roleTitle, 2]
