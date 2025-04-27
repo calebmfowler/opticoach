@@ -94,10 +94,10 @@ class Preprocessor:
             metricTypes.append(metricType)
             defaultValues.append(defaultValue)
             embedMask.append(metricEmbed)
+            vocabularies.append(vocab)
             backgroundMask.append(background)
             foresightMask.append(foresight)
             predictionMask.append(prediction)
-            vocabularies.append(vocab)
 
             return metric
         
@@ -360,16 +360,20 @@ class Preprocessor:
                 return 0
             
             school = school_coach_year.at[year, coach]
-            if school in proTeams.values:
+            if school in proTeams:
                 return 0.5
-            elif school in d1Schools.values:
-                d1MaxSkill = d1MaxSkill_year.at[year]
+            elif school in FBSSchools:
+                maxSkill = FBSMaxSkill_year.at[year]
                 skill = skill_school_year.at[year, school]
-                return skill / d1MaxSkill
-            elif school in otherSchools.values:
-                otherSchoolMaxSkill = otherSchoolMaxSkill_year.at[year]
+                return skill / maxSkill
+            elif school in FCSSchools:
+                maxSkill = FCSMaxSkill_year.at[year]
                 skill = skill_school_year.at[year, school]
-                return skill / otherSchoolMaxSkill
+                return skill / maxSkill
+            elif school in otherSchools:
+                maxSkill = otherSchoolMaxSkill_year.at[year]
+                skill = skill_school_year.at[year, school]
+                return skill / maxSkill
             else:
                 return 0
 
@@ -403,6 +407,18 @@ class Preprocessor:
             for school in annualRoster.index:
                 talentDict[school] = skill_map(annualRoster[school], year)
             return Series(talentDict)
+
+        def level_map(school):
+            if school in proTeams:
+                return 0
+            elif school in FBSSchools:
+                return 1
+            elif school in FCSSchools:
+                return 2
+            elif school in otherSchools:
+                return 3
+            else:
+                return -1
 
         # === METRICS COMPILATION ===
 
@@ -530,11 +546,11 @@ class Preprocessor:
             name="sos_coach_year"
         )
 
-        FBSSchools = Series(list(d1_links.keys())).map(school_map).values
-        FCSSchools = Series(list(fcs_links.keys())).map(school_map).values
         proTeams = Series(
             list(nfl_links.keys()) + list(cfl_links.keys()) + list(arenafl_links.keys()) + list(ufl_links.keys()) + list(usfl_links.keys())
         ).map(school_map).values
+        FBSSchools = Series(list(d1_links.keys())).map(school_map).values
+        FCSSchools = Series(list(fcs_links.keys())).map(school_map).values
         otherSchools = Series(
             list(d2_links.keys()) + list(d3_links.keys()) + list(naia_links.keys())
         ).map(school_map).values
@@ -560,13 +576,19 @@ class Preprocessor:
             name='talent_coach_year'
         )
 
-        level_coach_year = add_metric(
+        level_coach_year = add_metric( # x10, x11
             school_coach_year,
             int,
-            
+            -1,
+            True,
+            [-1, 0, 1, 2, 3],
+            True,
+            True,
+            False,
+            map=level_map,
+            name='level_coach_year'
         )
-        
-        
+         
         # success_coach_year = winRate_coach_year * sos_coach_year
         # success_coach_year = add_metric(
         #     success_coach_year,
@@ -613,7 +635,7 @@ class Preprocessor:
         # --- Compiling features and labels ---
 
         X, Y = [], []
-        relevantSchools = Series(list(d1_links.keys()) + list(fcs_links.keys()) + list(d2_links.keys())).map(school_map).values
+        relevantSchools = Series(list(d1_links.keys()) + list(fcs_links.keys())).map(school_map).values
         testCoaches = ['Jimbo Fisher', 'Mike Elko', 'Nick Saban']
 
         for i, coach in enumerate(school_coach_year.columns):
@@ -630,11 +652,11 @@ class Preprocessor:
                     changeYear + self.predictionYears > self.endYear):
                     continue
                 
-                backgroundYears = range(changeYear - self.backgroundYears, changeYear)
-                predictionYears = range(changeYear, changeYear + self.predictionYears)
+                backgroundYearList = range(changeYear - self.backgroundYears, changeYear)
+                predictionYearList = range(changeYear, changeYear + self.predictionYears)
 
-                predictionRoles = Series(role_coach_year.loc[predictionYears, coach]).values
-                predictionSchools = Series(school_coach_year.loc[predictionYears, coach]).values
+                predictionRoles = Series(role_coach_year.loc[predictionYearList, coach]).values
+                predictionSchools = Series(school_coach_year.loc[predictionYearList, coach]).values
                 if (not all([role[0] == 'HC' for role in predictionRoles]) or
                     not all([school == newSchool for school in predictionSchools]) or
                     not newSchool in relevantSchools):
@@ -643,8 +665,8 @@ class Preprocessor:
                 print(f"coach {i}, change {changeYear}, ({coach})")
                 XSample, YSample = [], []
                 for j, metric in enumerate(metrics):
-                    backgroundMetric = list(Series(DataFrame(metric).loc[backgroundYears, coach]).values)
-                    predictionMetric = list(Series(DataFrame(metric).loc[predictionYears, coach]).values)
+                    backgroundMetric = list(Series(DataFrame(metric).loc[backgroundYearList, coach]).values)
+                    predictionMetric = list(Series(DataFrame(metric).loc[predictionYearList, coach]).values)
 
                     if isinstance(backgroundMetric[0], list):
                         for subBackgroundMetric, subPredictionMetric, subMetricType, subDefaultValue, subBackground, subForesight, subPrediction in zip(
@@ -682,18 +704,30 @@ class Preprocessor:
                     for j, defaultValue in enumerate(defaultValues):
                         if isinstance(defaultValue, list):
                             for k, subDefaultValue in enumerate(defaultValue):
-                                default.append(XSample[t][x] == subDefaultValue)
-                                x += 1
+                                if backgroundMask[j][k]:
+                                    default.append(XSample[t][x] == subDefaultValue)
+                                    x += 1
+                                if foresightMask[j][k]:
+                                    default.append(XSample[t][x] == subDefaultValue)
+                                    x += 1
                         else:
-                            default.append(XSample[t][x] == defaultValue)
-                            x += 1
+                            if backgroundMask[j]:
+                                default.append(XSample[t][x] == defaultValue)
+                                x += 1
+                            if foresightMask[j]:
+                                default.append(XSample[t][x] == defaultValue)
+                                x += 1
                     if coach in testCoaches:
                         print(default)
-                        print(f"missing school or role: {any([default[i] for i in [0, 2, 3]])}")
-                        print(f"missing rank and performance: {all([default[i] for i in [4, 5, 6, 7]])}")
+                        print(any([default[i] for i in [0, 2, 3, 10]]))
+                        print(all([default[i] for i in [4, 5, 6, 7]]))
+                        print(t >= self.backgroundYears - self.predictionYears and any(default[i] for i in [1, 11]))
                     if (
-                        any([default[i] for i in [0, 2, 3]]) # missing school or role (coaching enviroment)
-                        or all([default[i] for i in [4, 5, 6, 7]]) # missing rank and performance (coaching performance)
+                        any([default[i] for i in [0, 2, 3, 10]]) # missing background school, role, or level (coaching enviroment)
+                        or all([default[i] for i in [4, 5, 6, 7]]) # missing backgorund rank and performance (coaching performance)
+                        or t >= self.backgroundYears - self.predictionYears and (
+                            any(default[i] for i in [1, 11]) # missing foresight school or level (coaching enviroment)
+                        )
                     ):
                         XSample[t] = [0 for y in range(len(XSample[t]))]
                         maskedYearCount += 1
