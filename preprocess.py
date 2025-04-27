@@ -635,7 +635,11 @@ class Preprocessor:
         # --- Compiling features and labels ---
 
         X, Y = [], []
-        relevantSchools = Series(list(d1_links.keys()) + list(fcs_links.keys())).map(school_map).values
+        relevantSchools = Series(
+            list(d1_links.keys()) + 
+            list(fcs_links.keys()) + 
+            list(d2_links.keys())
+        ).map(school_map).values
         testCoaches = ['Jimbo Fisher', 'Mike Elko', 'Nick Saban']
 
         for i, coach in enumerate(school_coach_year.columns):
