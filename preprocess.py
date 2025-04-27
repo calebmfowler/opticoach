@@ -640,33 +640,28 @@ class Preprocessor:
             list(fcs_links.keys()) + 
             list(d2_links.keys())
         ).map(school_map).values
-        testCoaches = ['Jimbo Fisher', 'Mike Elko', 'Nick Saban']
+        testCoaches = ['Jimbo Fisher']
 
         for i, coach in enumerate(school_coach_year.columns):
 
             schools = school_coach_year[coach]
-            schoolChanges = schools != schools.shift()
-            changeYears = schools.index[schoolChanges][1:]
 
-            for changeYear in changeYears:
+            for year in schools.index:
 
-                newSchool = school_coach_year.at[changeYear, coach]
-                if (newSchool == "" or
-                    changeYear - self.backgroundYears < self.startYear or
-                    changeYear + self.predictionYears > self.endYear):
+                if (year - self.backgroundYears < self.startYear or year + self.predictionYears > self.endYear):
                     continue
                 
-                backgroundYearList = range(changeYear - self.backgroundYears, changeYear)
-                predictionYearList = range(changeYear, changeYear + self.predictionYears)
+                backgroundYearList = range(year - self.backgroundYears, year)
+                predictionYearList = range(year, year + self.predictionYears)
 
-                predictionRoles = Series(role_coach_year.loc[predictionYearList, coach]).values
+                predictionRoleTitles = Series(roleTitle_coach_year.loc[predictionYearList, coach]).values
                 predictionSchools = Series(school_coach_year.loc[predictionYearList, coach]).values
-                if (not all([role[0] == 'HC' for role in predictionRoles]) or
-                    not all([school == newSchool for school in predictionSchools]) or
-                    not newSchool in relevantSchools):
+                if (not all([role == 'HC' for role in predictionRoleTitles]) or
+                    not all([school == predictionSchools[0] for school in predictionSchools]) or
+                    not predictionSchools[0] in relevantSchools):
                     continue
                 
-                print(f"coach {i}, change {changeYear}, ({coach})")
+                print(f"coach {i}, {year}, ({coach})")
                 XSample, YSample = [], []
                 for j, metric in enumerate(metrics):
                     backgroundMetric = list(Series(DataFrame(metric).loc[backgroundYearList, coach]).values)
@@ -728,7 +723,7 @@ class Preprocessor:
                         print(t >= self.backgroundYears - self.predictionYears and any(default[i] for i in [1, 11]))
                     if (
                         any([default[i] for i in [0, 2, 3, 10]]) # missing background school, role, or level (coaching enviroment)
-                        or all([default[i] for i in [4, 5, 6, 7]]) # missing backgorund rank and performance (coaching performance)
+                        or all([default[i] for i in [4, 5, 6, 7]]) # missing background rank and performance (coaching performance)
                         or t >= self.backgroundYears - self.predictionYears and (
                             any(default[i] for i in [1, 11]) # missing foresight school or level (coaching enviroment)
                         )
