@@ -8,7 +8,7 @@ from postprocess import Postprocessor
 aggregator = Aggregator()
 # aggregator.aggregate()
 preprocessor = Preprocessor(aggregator, 1980, 2024, 15, 5)
-preprocessor.preprocess()
+# preprocessor.preprocess()
 model = OpticoachModel(preprocessor)
 model.train()
 model.predict()
