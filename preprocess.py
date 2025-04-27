@@ -540,8 +540,10 @@ class Preprocessor:
         ).map(school_map).values
 
         skill_school_year = roster_school_year.apply(annual_skill_map, axis=1)
-        skilledD1Schools = [school for school in d1Schools if school in skill_school_year.columns]
-        d1MaxSkill_year = skill_school_year[skilledD1Schools].max(axis=1)
+        skilledFBSSchools = [school for school in FBSSchools if school in skill_school_year.columns]
+        FBSMaxSkill_year = skill_school_year[skilledFBSSchools].max(axis=1)
+        skilledFCSSchools = [school for school in FCSSchools if school in skill_school_year.columns]
+        FCSMaxSkill_year = skill_school_year[skilledFCSSchools].max(axis=1)
         skilledOtherSchools = [school for school in otherSchools if school in skill_school_year.columns]
         otherSchoolMaxSkill_year = skill_school_year[skilledOtherSchools].max(axis=1)
         roster_coach_year = recolumnate(roster_school_year, school_coach_year)
