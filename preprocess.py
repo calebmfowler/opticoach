@@ -66,7 +66,7 @@ class Preprocessor:
         return
 
     def preprocess(self):
-        metrics, metricTypes, embedMask, backgroundMask, foresightMask, predictionMask, vocabularies = [], [], [], [], [], [], []
+        metrics, metricTypes, defaultValues, embedMask, backgroundMask, foresightMask, predictionMask, vocabularies = [], [], [], [], [], [], [], []
 
         # === UTILITIES ===
 
@@ -83,7 +83,7 @@ class Preprocessor:
             df.columns = df.columns.map(map)
             return df
 
-        def add_metric(metric, metricType, metricEmbed, vocab, background, foresight, prediction, map=None, name=None):
+        def add_metric(metric, metricType, defaultValue, metricEmbed, vocab, background, foresight, prediction, map=None, name=None):
             if map:
                 metric = DataFrame(metric).map(map)
 
@@ -92,6 +92,7 @@ class Preprocessor:
             
             metrics.append(metric)
             metricTypes.append(metricType)
+            defaultValues.append(defaultValue)
             embedMask.append(metricEmbed)
             backgroundMask.append(background)
             foresightMask.append(foresight)
@@ -100,12 +101,96 @@ class Preprocessor:
 
             return metric
         
+        calc_senior = lambda num : float(1 - (min(num, 3) - 1) / 4)
+
+        def numerize_string(s):
+            '''this function trims a string to only include the first number in the string.'''
+            new_str = ''
+            for c in s:
+                if c.isnumeric() == True:
+                    new_str += c
+                else:
+                    break
+            return new_str
+
+        def position_weight(string):
+            '''this function computes the weight of a position based on its importance in football.'''
+            if string == 'QB': #QB tier
+                weight = 3
+            elif string in ['RB', 'FB', 'HB']: #RB tier
+                weight = 2.5
+            elif string in ['TE', 'WR', 'DE', 'EDGE', 'CB', 'S', 'DT']: #WR/TE tier, DE/CB tier
+                weight = 2
+            elif string in ['LB', 'DB', 'ILB', 'OLB']: #LB tier
+                weight = 1.5
+            elif string in ['OG', 'OL', 'C', 'OT', 'DL', 'DT', 'NT']: #OL/DL tier
+                weight = 1
+            else: #other positions
+                weight = 1
+            return weight
+
+        def smooth_blend(x, x0, width):
+            """Smooth transition function centered at x0 with given width. Precursor to hybrid function below."""
+            return 1 / (1 + np.exp(-(x - x0) / width))
+
+        def hybrid_function_smooth_slope(x,
+                                        exp_decay_rate=0.4,
+                                        exp_drop=0.05,
+                                        sigmoid_center=128,
+                                        sigmoid_steepness=20,
+                                        plateau_start=0.95,
+                                        plateau_end=0.93,
+                                        final_value=0.1,
+                                        exp_end=10,
+                                        sigmoid_start=64,
+                                        sigmoid_end=192,
+                                        blend_width=5
+        ):
+            '''mildly arbitrary function for computing talent level of a player based on their draft pick number. 
+            It is a hybrid of an exponential decay, a light decreasing function, and a sigmoid decline.'''
+            # Region 1: exponential decay from 1 to plateau_start
+            exp_part = 1 - exp_drop * (1 - np.exp(-exp_decay_rate * x))
+
+            # Region 2: light decreasing function from plateau_start to plateau_end
+            slope = (plateau_end - plateau_start) / (sigmoid_start - exp_end)
+            plateau_part = plateau_start + slope * (x - exp_end)
+
+            # Region 3: sigmoid decline from plateau_end to final_value
+            sigmoid_part = (plateau_end - final_value) / (1 + np.exp((x - sigmoid_center) / sigmoid_steepness)) + final_value
+
+            # Region 4: final flat value after sigmoid
+            final_part = np.full_like(x, final_value)
+
+            # Smooth transitions
+            blend_1 = smooth_blend(x, exp_end, blend_width)         # exp -> slope
+            blend_2 = smooth_blend(x, sigmoid_start, blend_width)   # slope -> sigmoid
+            blend_3 = smooth_blend(x, sigmoid_end, blend_width)     # sigmoid -> flat
+
+            # Combine smoothly
+            y = ((1 - blend_1) * exp_part +
+                (blend_1 * (1 - blend_2)) * plateau_part +
+                (blend_2 * (1 - blend_3)) * sigmoid_part +
+                blend_3 * final_part)
+
+            return y
+
         # === FILE IMPORTS ===
 
         coachJSON = load_json('files/coach_history_regularized.json')
         schoolMapJSON = load_json('files/mapping_schools.json')
         pollsJSON = load_json('files/final_polls.json')
         recordsJSON = load_json('files/records.json')
+        rostersJSON = load_json('files/rosters.json')
+        d1_links = load_json('files/school_links.json')
+        d2_links = load_json('files/DII_links.json')
+        d3_links = load_json('files/DIII_links.json')
+        naia_links = load_json('files/naia_links.json')
+        fcs_links = load_json('files/FCS_links.json')
+        nfl_links = load_json('files/nfl_links.json')
+        cfl_links = load_json('files/cfl_links.json')
+        arenafl_links = load_json('files/arenafl_links.json')
+        ufl_links = load_json('files/ufl_links.json')
+        usfl_links = load_json('files/usfl_links.json')
 
         # === MAPS ===
 
@@ -127,7 +212,7 @@ class Preprocessor:
                     roleTitle = roleTitle[:i]
                 if roleTitle == 'HC':
                     return [roleTitle, 0]
-                elif roleTitle in ['OC', 'DC']:
+                elif roleTitle in ['OC', 'DC', 'ST', 'PGC', 'RGC']:
                     return [roleTitle, 1]
                 else:
                     return [roleTitle, 2]
@@ -144,15 +229,15 @@ class Preprocessor:
             else:
                 return 30
 
-        def performance_map(record, year, coach):
+        def performance_map(record):
             '''
             this function returns a list of statistical features for a given coach in a given year. It includes scoring offense,
             scoring defense, win percentage, talent level, and strength of schedule.
             '''
-            if record != record or record == []:
+            if record != record or record == [] or not isinstance(record, list):
                 return [20, 30, 0.4]
             
-            elif not isinstance(record[0], list):
+            if not isinstance(record[0], list):
                 game = record
                 score = str(game[1]).split('-')
                 offense, defense, win = int(score[0]), int(score[1]), 0
@@ -186,22 +271,14 @@ class Preprocessor:
 
                 return [scoringOffense, scoringDefense, winRate]
 
-        def annual_performance_map(season):
-            season = Series(season)
-            year = int(season.name)
-            recordFeaturesDict = {}
-            for coach in season.index:
-                recordFeaturesDict[coach] = performance_map(season[coach], year, coach)
-            return Series(recordFeaturesDict)
-
         def win_rate_map(record):
             return record[2]
 
         def avg_opponent_win_rate_map(record, year):
-            if record != record or record == []:
+            if record != record or record == [] or not isinstance(record, list):
                 return 0.4
             
-            elif not isinstance(record[0], list):
+            if not isinstance(record[0], list):
                 game = record
                 opponentSchool = str(game[0])
                 if not opponentSchool in coach_school_year.columns:
@@ -237,7 +314,7 @@ class Preprocessor:
             return Series(recordFeaturesDict)
 
         def sos_map(record, year, coach):
-            if record != record or record == []:
+            if record != record or record == [] or not isinstance(record, list):
                 return 0.4
             
             teamSos = avgOpponentWinRate_coach_year.at[year, coach]
@@ -278,17 +355,78 @@ class Preprocessor:
                 sosDict[coach] = sos_map(season[coach], year, coach)
             return Series(sosDict)
 
+        def talent_map(roster, year, coach):
+            if not isinstance(roster, list) or roster == []:
+                return 0
+            
+            school = school_coach_year.at[year, coach]
+            if school in proTeams.values:
+                return 0.5
+            elif school in d1Schools.values:
+                d1MaxSkill = d1MaxSkill_year.at[year]
+                skill = skill_school_year.at[year, school]
+                return skill / d1MaxSkill
+            elif school in otherSchools.values:
+                otherSchoolMaxSkill = otherSchoolMaxSkill_year.at[year]
+                skill = skill_school_year.at[year, school]
+                return skill / otherSchoolMaxSkill
+            else:
+                return 0
+
+        def annual_talent_map(annualRoster):
+            annualRoster = Series(annualRoster)
+            year = int(annualRoster.name)
+            talentDict = {}
+            for coach in annualRoster.index:
+                talentDict[coach] = talent_map(annualRoster[coach], year, coach)
+            return Series(talentDict)
+
+        def skill_map(roster, year):
+            if not isinstance(roster, list) or roster == []:
+                return 0
+            
+            totalSkill = 0
+            for player in roster:
+                position = str(player[1])
+                try:
+                    pick = int(numerize_string(player[2]))
+                except:
+                    pick = 200
+                seniority = calc_senior(int(player[-1]) - year)
+                totalSkill += position_weight(position) * hybrid_function_smooth_slope(pick - 1) * seniority            
+            return totalSkill
+
+        def annual_skill_map(annualRoster):
+            annualRoster = Series(annualRoster)
+            year = int(annualRoster.name)
+            talentDict = {}
+            for school in annualRoster.index:
+                talentDict[school] = skill_map(annualRoster[school], year)
+            return Series(talentDict)
+
         # === METRICS COMPILATION ===
 
         # --- Vocabulary Generation ---
 
         school_coach_year = tabulate(coachJSON, columnDepth=3, indexDepth=0, valueDepth=1)
         school_coach_year = school_coach_year.map(school_map)
+
         rank_school_year = tabulate(pollsJSON, columnDepth=(2, None), indexDepth=0, valueDepth=1)
         rank_school_year = map_columns(rank_school_year, school_map)
+
         record_school_year = tabulate(recordsJSON, columnDepth=0, indexDepth=1, valueDepth=(2, None))
         record_school_year = map_columns(record_school_year, school_map)
-        schoolVocabulary = unique(hstack((unique(school_coach_year), rank_school_year.columns, record_school_year.columns)))
+
+        roster_school_year = tabulate(rostersJSON, columnDepth=1, indexDepth=0, valueDepth=(2, None))
+        roster_school_year = roster_school_year.drop(['', 'fail'], axis=1)
+        roster_school_year = map_columns(roster_school_year, school_map)
+
+        schoolVocabulary = unique(hstack((
+            unique(school_coach_year),
+            rank_school_year.columns,
+            record_school_year.columns,
+            roster_school_year.columns
+        )))
         schoolVocabulary = insert(schoolVocabulary[1:], 0, ['', '[UNK]'])
         schoolVectorization = TextVectorization(standardize=None, split=None, vocabulary=schoolVocabulary)
 
@@ -305,9 +443,10 @@ class Preprocessor:
             columns=school_coach_year.columns,
             index=school_coach_year.index
         )
-        schoolInt_coach_year = add_metric(
+        schoolInt_coach_year = add_metric( # x0, X1
             schoolInt_coach_year,
             int,
+            0,
             True,
             schoolVocabulary,
             True,
@@ -321,9 +460,10 @@ class Preprocessor:
             columns=roleTitle_coach_year.columns,
             index=roleTitle_coach_year.index
         )
-        roleTitleInt_coach_year = add_metric(
+        roleTitleInt_coach_year = add_metric( # x2
             roleTitleInt_coach_year,
             int,
+            0,
             True,
             roleTitleVocabulary,
             True,
@@ -332,23 +472,25 @@ class Preprocessor:
             name="roleTitleInt_coach_year"
         )
 
-        roleRank_coach_year = role_coach_year.map(role_rank_map)
-        roleRank_coach_year = add_metric(
-            roleRank_coach_year,
+        roleRank_coach_year = add_metric( # x3
+            role_coach_year,
             int,
+            -1,
             True,
             [-1, 0, 1, 2],
             True,
             False,
             False,
+            map=role_rank_map,
             name="roleRank_coach_year"
         )
 
         rank_school_year = rank_school_year.apply(to_numeric, errors='coerce')
         rank_coach_year = recolumnate(rank_school_year, school_coach_year)
-        rank_coach_year = add_metric(
+        rank_coach_year = add_metric( # x4
             rank_coach_year,
             int,
+            30,
             False,
             [],
             True,
@@ -359,15 +501,16 @@ class Preprocessor:
         )
 
         record_coach_year = recolumnate(record_school_year, school_coach_year)
-        performance_coach_year = record_coach_year.apply(annual_performance_map, axis=1)
-        performance_coach_year = add_metric(
-            performance_coach_year,
+        performance_coach_year = add_metric( # x5, x6, x7
+            record_coach_year,
             [float, float, float],              # metricType
+            [20., 30., 0.4],                    # defaultValue
             [False, False, False],              # metricEmbed
             [[], [], []],                       # vocabularies
             [True, True, True],                 # backgroundMask
             [False, False, False],              # foresightMask
             [False, False, True],               # predictionMask
+            map=performance_map,
             name="performance_coach_year"
         )
 
@@ -375,9 +518,10 @@ class Preprocessor:
         winRate_coach_year = performance_coach_year.map(win_rate_map)
         avgOpponentWinRate_coach_year = record_coach_year.apply(annual_avg_opponent_win_rate_map, axis=1)
         sos_coach_year = record_coach_year.apply(annual_sos_map, axis=1)
-        sos_coach_year = add_metric(
+        sos_coach_year = add_metric( # x8
             sos_coach_year,
             float,
+            0.4,
             False,
             [],
             True,
@@ -385,6 +529,56 @@ class Preprocessor:
             False,
             name="sos_coach_year"
         )
+
+        FBSSchools = Series(list(d1_links.keys())).map(school_map).values
+        FCSSchools = Series(list(fcs_links.keys())).map(school_map).values
+        proTeams = Series(
+            list(nfl_links.keys()) + list(cfl_links.keys()) + list(arenafl_links.keys()) + list(ufl_links.keys()) + list(usfl_links.keys())
+        ).map(school_map).values
+        otherSchools = Series(
+            list(d2_links.keys()) + list(d3_links.keys()) + list(naia_links.keys())
+        ).map(school_map).values
+
+        skill_school_year = roster_school_year.apply(annual_skill_map, axis=1)
+        skilledFBSSchools = [school for school in FBSSchools if school in skill_school_year.columns]
+        FBSMaxSkill_year = skill_school_year[skilledFBSSchools].max(axis=1)
+        skilledFCSSchools = [school for school in FCSSchools if school in skill_school_year.columns]
+        FCSMaxSkill_year = skill_school_year[skilledFCSSchools].max(axis=1)
+        skilledOtherSchools = [school for school in otherSchools if school in skill_school_year.columns]
+        otherSchoolMaxSkill_year = skill_school_year[skilledOtherSchools].max(axis=1)
+        roster_coach_year = recolumnate(roster_school_year, school_coach_year)
+        talent_coach_year = roster_coach_year.apply(annual_talent_map, axis=1)
+        talent_coach_year = add_metric( # x9
+            talent_coach_year,
+            float,
+            0.,
+            False,
+            [],
+            True,
+            False,
+            False,
+            name='talent_coach_year'
+        )
+
+        level_coach_year = add_metric(
+            school_coach_year,
+            int,
+            
+        )
+        
+        
+        # success_coach_year = winRate_coach_year * sos_coach_year
+        # success_coach_year = add_metric(
+        #     success_coach_year,
+        #     float,
+        #     0.16,
+        #     False,
+        #     [],
+        #     False,
+        #     False,
+        #     False,
+        #     name='success_coach_year'
+        # )
 
         # === PACKAGING METRICS ===
 
@@ -419,6 +613,8 @@ class Preprocessor:
         # --- Compiling features and labels ---
 
         X, Y = [], []
+        relevantSchools = Series(list(d1_links.keys()) + list(fcs_links.keys()) + list(d2_links.keys())).map(school_map).values
+        testCoaches = ['Jimbo Fisher', 'Mike Elko', 'Nick Saban']
 
         for i, coach in enumerate(school_coach_year.columns):
 
@@ -440,21 +636,21 @@ class Preprocessor:
                 predictionRoles = Series(role_coach_year.loc[predictionYears, coach]).values
                 predictionSchools = Series(school_coach_year.loc[predictionYears, coach]).values
                 if (not all([role[0] == 'HC' for role in predictionRoles]) or
-                    not all([school == newSchool for school in predictionSchools])):
+                    not all([school == newSchool for school in predictionSchools]) or
+                    not newSchool in relevantSchools):
                     continue
                 
                 print(f"coach {i}, change {changeYear}, ({coach})")
                 XSample, YSample = [], []
-                # metricType, background, foresight, prediction
-                for i, metric in enumerate(metrics):
+                for j, metric in enumerate(metrics):
                     backgroundMetric = list(Series(DataFrame(metric).loc[backgroundYears, coach]).values)
                     predictionMetric = list(Series(DataFrame(metric).loc[predictionYears, coach]).values)
 
                     if isinstance(backgroundMetric[0], list):
-                        for subBackgroundMetric, subPredictionMetric, subMetricType, subBackground, subForesight, subPrediction in zip(
+                        for subBackgroundMetric, subPredictionMetric, subMetricType, subDefaultValue, subBackground, subForesight, subPrediction in zip(
                             [list(subMetric) for subMetric in zip(*backgroundMetric)],
                             [list(subMetric) for subMetric in zip(*predictionMetric)],
-                            metricTypes[i], backgroundMask[i], foresightMask[i], predictionMask[i]
+                            metricTypes[j], defaultValues[j], backgroundMask[j], foresightMask[j], predictionMask[j]
                         ):
                             if subBackground:
                                 XSample.append(subBackgroundMetric)
@@ -464,19 +660,61 @@ class Preprocessor:
                             if subPrediction:
                                 YSample.append(subPredictionMetric)
                     else:
-                        if backgroundMask[i]:
+                        if backgroundMask[j]:
                             XSample.append(backgroundMetric)
-                        if foresightMask[i]:
-                            foresightPadding = [metricTypes[i]()] * (self.backgroundYears - self.predictionYears)
+                        if foresightMask[j]:
+                            foresightPadding = [metricTypes[j]()] * (self.backgroundYears - self.predictionYears)
                             XSample.append(foresightPadding + predictionMetric)
-                        if predictionMask[i]:
+                        if predictionMask[j]:
                             YSample.append(predictionMetric)
 
-                X.append([list(row) for row in zip(*XSample)])
-                Y.append([list(row) for row in zip(*YSample)])
+                XSample = [list(row) for row in zip(*XSample)]
+                YSample = [list(row) for row in zip(*YSample)]
+
+                if coach in testCoaches:
+                    print(f"Unmasked XSample\n{nparr(XSample)}")
+                    print(f"Unmasked YSample\n{nparr(YSample)}")
+
+                maskedYearCount = 0
+                for t in range(self.backgroundYears):
+                    x = 0
+                    default = []
+                    for j, defaultValue in enumerate(defaultValues):
+                        if isinstance(defaultValue, list):
+                            for k, subDefaultValue in enumerate(defaultValue):
+                                default.append(XSample[t][x] == subDefaultValue)
+                                x += 1
+                        else:
+                            default.append(XSample[t][x] == defaultValue)
+                            x += 1
+                    if coach in testCoaches:
+                        print(default)
+                        print(f"missing school or role: {any([default[i] for i in [0, 2, 3]])}")
+                        print(f"missing rank and performance: {all([default[i] for i in [4, 5, 6, 7]])}")
+                    if (
+                        any([default[i] for i in [0, 2, 3]]) # missing school or role (coaching enviroment)
+                        or all([default[i] for i in [4, 5, 6, 7]]) # missing rank and performance (coaching performance)
+                    ):
+                        XSample[t] = [0 for y in range(len(XSample[t]))]
+                        maskedYearCount += 1
+                
+                if coach in testCoaches:
+                    print(f"Masked XSample\n{nparr(XSample)}")
+                    print(f"Masked YSample\n{nparr(YSample)}")
+
+                if maskedYearCount > self.backgroundYears / 3:
+                    if coach in testCoaches:
+                        print(f"Excessive Masking, Tossing Sample")
+                    continue
+
+                X.append(XSample)
+                Y.append(YSample)
 
         X = nparr(X)
         Y = nparr(Y)
+
+        print(f"X {shape(X)}\n{X}")
+        print(f"Y {shape(Y)}\n{Y}")
 
         trainX, validX, trainY, validY = train_test_split(X, Y, test_size=0.2)
 

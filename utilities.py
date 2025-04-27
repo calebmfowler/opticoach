@@ -184,7 +184,7 @@ def tabulate_dict(data, columnDepth, indexDepth, valueDepth):
             collectedData.append((index, column, value))
     
     collectedData = DataFrame(collectedData, columns=['index', 'column', 'value'])
-    tabulatedData = collectedData.pivot_table(index='index', columns='column', values='value', aggfunc='first')
+    tabulatedData = collectedData.pivot_table(index='index', columns='column', values='value', aggfunc='sum')
     return tabulatedData
 
 def serialize_dict(data, indexDepth, valueDepth):
@@ -267,7 +267,7 @@ def recolumnate_df(data, columnation):
     
     merged = long.merge(data_long, on=["index", "old_column"], how="left")
 
-    recolumnated = merged.pivot(index="index", columns="column", values="value")
+    recolumnated = merged.pivot_table(index="index", columns="column", values="value", aggfunc='sum')
     
     recolumnated.index.name = columnation.index.name
     recolumnated.columns.name = None

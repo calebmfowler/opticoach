@@ -60,7 +60,7 @@ class Postprocessor:
                 return 1 - ss_res_train / ss_tot_train
 
             R2Train.append(get_r2(tP, tY))
-            R2Valid.append(get_r2(tP, tY))
+            R2Valid.append(get_r2(vP, vY))
             print(f"R² value for output {i} (train): {R2Train[-1]}")
             print(f"R² value for output {i} (valid): {R2Valid[-1]}")
         

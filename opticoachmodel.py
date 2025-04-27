@@ -1,6 +1,6 @@
 from copy import deepcopy
 from keras import Model
-from keras.src.callbacks import ReduceLROnPlateau
+from keras.src.callbacks import ReduceLROnPlateau, EarlyStopping
 from keras.src.layers import Input, Embedding, Concatenate, Masking, Lambda, LSTM, Dense, TextVectorization, Normalization
 from keras._tf_keras.keras.models import load_model
 from keras.src.optimizers import Adam
@@ -100,16 +100,14 @@ class OpticoachModel:
                 inputLayers.append(inputLayer)
                 numerizedLayers.append(inputLayer)
         
-        # Concatenate numerical features
+        # Concatenate and normalize the numerical features
         numericalConcatenation = Concatenate()(numerizedLayers)
-
-        # Create the normalization layer
-        normalizationLayer = Normalization()(numericalConcatenation)
         
         # In order to accomodate gaps in the data, a masking is used to cover missing time steps 
         # and missing metrics. There will be gaps in the time sequence in which a coach was not 
         # a head coach, and gaps in the metrics if data is not available.
-        maskLayer = Masking(mask_value=nan)(normalizationLayer)
+        maskLayer = Masking(mask_value=0)(numericalConcatenation)
+        normalizedLayer = Normalization()(maskLayer)
         
         # In order to handle long-term dependencies we will utilize a Long Short Term-Memory (LSTM)
         # layer. Dropout and regularization are also supplemented in order to avoid overfitting.
@@ -120,10 +118,10 @@ class OpticoachModel:
             recurrent_dropout=dropout_rate,
             kernel_regularizer='l2',
             return_sequences=True  # Ensure the LSTM outputs sequences for each time step
-        )(maskLayer)
+        )(normalizedLayer)
 
-        # Slice the LSTM output to keep only the last 5 time steps
-        slicedLayer = Slicer(num_steps=5)(lstmLayer)
+        # Slice the LSTM output to keep only the last 3 time steps
+        slicedLayer = Slicer(num_steps=3)(lstmLayer)
 
         # In order to interpret the LSTM output, a Dense layer is added. Dropout is omitted
         # following this layer because that adds imprecision to regression tasks.
@@ -201,17 +199,19 @@ class OpticoachModel:
         learningRateReducer = ReduceLROnPlateau(
             monitor='val_loss',  # Monitor validation loss
             factor=0.5,          # Reduce learning rate by a factor of 0.5
-            patience=3,          # Wait for 3 epochs without improvement
+            patience=5,          # Wait for 3 epochs without improvement
             min_lr=1e-6          # Minimum learning rate
         )
+
+        earlyStopping = EarlyStopping(monitor='val_loss', patience=5, restore_best_weights=True)
 
         # Train the best model with the learning rate reducer
         best_model.fit(
             tXS, tY,
-            batch_size=16,
+            batch_size=8,
             epochs=100,
             verbose=2,
-            callbacks=[learningRateReducer],  # Include the learning rate reducer
+            callbacks=[learningRateReducer, earlyStopping],  # Include the learning rate reducer earlyStopping],
             validation_data=(vXS, vY)
         )
 

@@ -269,14 +269,15 @@ def hybrid_function_smooth_slope(x,
     return y
 
 def calc_senior(number):
-    '''this function calculates the seniority weight of a player based on their draft year and current year.'''
+    '''
+    this function calculates the seniority weight of a player based on their draft year and current year.
+    '''
     if number == 1:
-        weight = 1
+        return 1
     elif number == 2:
-        weight = .75
+        return .75
     elif number >= 3:
-        weight = .5
-    return weight
+        return .5
 
 def talent_composite(year, team):
     '''this function computes the talent level of a team in a given year. It is computed by incorporating position, pick number, and seniority of the players.'''
