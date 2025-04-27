@@ -98,7 +98,8 @@ class OpticoachModel:
             else:
                 inputLayer = Input((self.__backgroundYears, 1), name=f"input_{i}_num")
                 inputLayers.append(inputLayer)
-                numerizedLayers.append(inputLayer)
+                normalizedLayer = Normalization()(inputLayer)
+                numerizedLayers.append(normalizedLayer)
         
         # Concatenate and normalize the numerical features
         numericalConcatenation = Concatenate()(numerizedLayers)
@@ -107,7 +108,6 @@ class OpticoachModel:
         # and missing metrics. There will be gaps in the time sequence in which a coach was not 
         # a head coach, and gaps in the metrics if data is not available.
         maskLayer = Masking(mask_value=0)(numericalConcatenation)
-        normalizedLayer = Normalization()(maskLayer)
         
         # In order to handle long-term dependencies we will utilize a Long Short Term-Memory (LSTM)
         # layer. Dropout and regularization are also supplemented in order to avoid overfitting.
@@ -118,7 +118,7 @@ class OpticoachModel:
             recurrent_dropout=dropout_rate,
             kernel_regularizer='l2',
             return_sequences=True  # Ensure the LSTM outputs sequences for each time step
-        )(normalizedLayer)
+        )(maskLayer)
 
         # Slice the LSTM output to keep only the last 3 time steps
         slicedLayer = Slicer(num_steps=3)(lstmLayer)
