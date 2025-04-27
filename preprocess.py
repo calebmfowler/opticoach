@@ -66,7 +66,7 @@ class Preprocessor:
         return
 
     def preprocess(self):
-        metrics, metricTypes, embedMask, backgroundMask, foresightMask, predictionMask, vocabularies = [], [], [], [], [], [], []
+        metrics, metricTypes, defaultValues, embedMask, backgroundMask, foresightMask, predictionMask, vocabularies = [], [], [], [], [], [], [], []
 
         # === UTILITIES ===
 
@@ -83,7 +83,7 @@ class Preprocessor:
             df.columns = df.columns.map(map)
             return df
 
-        def add_metric(metric, metricType, metricEmbed, vocab, background, foresight, prediction, map=None, name=None):
+        def add_metric(metric, metricType, defaultValue, metricEmbed, vocab, background, foresight, prediction, map=None, name=None):
             if map:
                 metric = DataFrame(metric).map(map)
 
@@ -92,6 +92,7 @@ class Preprocessor:
             
             metrics.append(metric)
             metricTypes.append(metricType)
+            defaultValues.append(defaultValue)
             embedMask.append(metricEmbed)
             backgroundMask.append(background)
             foresightMask.append(foresight)
@@ -445,6 +446,7 @@ class Preprocessor:
         schoolInt_coach_year = add_metric(
             schoolInt_coach_year,
             int,
+            0,
             True,
             schoolVocabulary,
             True,
@@ -461,6 +463,7 @@ class Preprocessor:
         roleTitleInt_coach_year = add_metric(
             roleTitleInt_coach_year,
             int,
+            0,
             True,
             roleTitleVocabulary,
             True,
@@ -473,6 +476,7 @@ class Preprocessor:
         roleRank_coach_year = add_metric(
             roleRank_coach_year,
             int,
+            -1,
             True,
             [-1, 0, 1, 2],
             True,
@@ -486,6 +490,7 @@ class Preprocessor:
         rank_coach_year = add_metric(
             rank_coach_year,
             int,
+            30,
             False,
             [],
             True,
@@ -499,6 +504,7 @@ class Preprocessor:
         performance_coach_year = add_metric(
             record_coach_year,
             [float, float, float],              # metricType
+            [20., 30., 0.4],                    # defaultValue
             [False, False, False],              # metricEmbed
             [[], [], []],                       # vocabularies
             [True, True, True],                 # backgroundMask
@@ -515,6 +521,7 @@ class Preprocessor:
         sos_coach_year = add_metric(
             sos_coach_year,
             float,
+            0.4,
             False,
             [],
             True,
@@ -541,6 +548,7 @@ class Preprocessor:
         talent_coach_year = add_metric(
             talent_coach_year,
             float,
+            0.,
             False,
             [],
             True,
@@ -553,6 +561,7 @@ class Preprocessor:
         success_coach_year = add_metric(
             success_coach_year,
             float,
+            0.16,
             False,
             [],
             False,
@@ -622,34 +631,65 @@ class Preprocessor:
                 
                 print(f"coach {i}, change {changeYear}, ({coach})")
                 XSample, YSample = [], []
+                defaultValueCount = 0
                 for j, metric in enumerate(metrics):
                     backgroundMetric = list(Series(DataFrame(metric).loc[backgroundYears, coach]).values)
                     predictionMetric = list(Series(DataFrame(metric).loc[predictionYears, coach]).values)
 
                     if isinstance(backgroundMetric[0], list):
-                        for subBackgroundMetric, subPredictionMetric, subMetricType, subBackground, subForesight, subPrediction in zip(
+                        for subBackgroundMetric, subPredictionMetric, subMetricType, subDefaultValue, subBackground, subForesight, subPrediction in zip(
                             [list(subMetric) for subMetric in zip(*backgroundMetric)],
                             [list(subMetric) for subMetric in zip(*predictionMetric)],
-                            metricTypes[j], backgroundMask[j], foresightMask[j], predictionMask[j]
+                            metricTypes[j], defaultValues[j], backgroundMask[j], foresightMask[j], predictionMask[j]
                         ):
                             if subBackground:
                                 XSample.append(subBackgroundMetric)
+                                defaultValueCount += sum(1 for subValue in subBackgroundMetric if subValue == subDefaultValue)
                             if subForesight:
                                 foresightPadding = [subMetricType()] * (self.backgroundYears - self.predictionYears)
                                 XSample.append(foresightPadding + subPredictionMetric)
+                                defaultValueCount += sum(1 for subValue in subPredictionMetric if subValue == subDefaultValue)
                             if subPrediction:
                                 YSample.append(subPredictionMetric)
+                                defaultValueCount += sum(1 for subValue in subPredictionMetric if subValue == subDefaultValue)
                     else:
                         if backgroundMask[j]:
                             XSample.append(backgroundMetric)
+                            defaultValueCount += sum(1 for value in backgroundMetric if value == defaultValues[j])
                         if foresightMask[j]:
                             foresightPadding = [metricTypes[j]()] * (self.backgroundYears - self.predictionYears)
                             XSample.append(foresightPadding + predictionMetric)
+                            defaultValueCount += sum(1 for value in predictionMetric if value == defaultValues[j])
                         if predictionMask[j]:
                             YSample.append(predictionMetric)
+                            defaultValueCount += sum(1 for value in predictionMetric if value == defaultValues[j])
 
-                X.append([list(row) for row in zip(*XSample)])
-                Y.append([list(row) for row in zip(*YSample)])
+                if defaultValueCount >= 0.5 * (len(XSample) + len(YSample)) * self.backgroundYears:
+                    print("     insufficient data")
+                    continue
+
+                XSample = [list(row) for row in zip(*XSample)]
+                YSample = [list(row) for row in zip(*YSample)]
+
+                for t in range(self.backgroundYears):
+                    x = 0
+                    defaultCount = 0
+                    for j, defaultValue in enumerate(defaultValues):
+                        if isinstance(defaultValue, list):
+                            for k, subDefaultValue in enumerate(defaultValue):
+                                if XSample[t][x] == subDefaultValue:
+                                    defaultCount += 1
+                                x += 1
+                        else:
+                            if XSample[t][x] == defaultValue:
+                                defaultCount += 1
+                            x += 1
+                    if defaultCount >= 3:
+                        XSample[t] = [0 for y in range(len(XSample[t]))]
+                        print(f"     masked t = {t}")
+                
+                X.append(XSample)
+                Y.append(YSample)
 
         X = nparr(X)
         Y = nparr(Y)

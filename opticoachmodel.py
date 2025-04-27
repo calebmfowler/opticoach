@@ -95,21 +95,22 @@ class OpticoachModel:
         numericalConcatenation = Concatenate()(numerizedLayers)
 
         normalizedLayer = Normalization()(numericalConcatenation)
+
         # In order to accomodate gaps in the data, a masking is used to cover missing time steps 
         # and missing metrics. There will be gaps in the time sequence in which a coach was not 
         # a head coach, and gaps in the metrics if data is not available.
-        maskLayer = Masking(mask_value=nan)(normalizedLayer)
+        maskLayer = Masking(mask_value=0)(normalizedLayer)
         
         # In order to handle long-term dependencies we will utilize a Long Short Term-Memory (LSTM)
         # layer. Dropout and regularization are also supplemented in order to avoid overfitting.
         # We use chat's rule of thumb, lstm_units = min(128, max(32, features * 2)).
         lstmLayer = LSTM(
-            160,
-            dropout=0.2,
-            recurrent_dropout=0.2,
+            128,
+            dropout=0.3,
+            recurrent_dropout=0.25,
             kernel_regularizer='l2',
             return_sequences=True  # Ensure the LSTM outputs sequences for each time step
-        )(maskLayer)
+        )(normalizedLayer)
 
         # Slice the LSTM output to keep only the last 3 time steps
         slicedLayer = Slicer(num_steps=3)(lstmLayer)
@@ -168,8 +169,8 @@ class OpticoachModel:
 
         model.fit(
             tXS, tY,
-            batch_size=16,
-            epochs=100,
+            batch_size=8,
+            epochs=50,
             verbose=2,
             callbacks=learningRateReducer,
             validation_data=(vXS, vY)
