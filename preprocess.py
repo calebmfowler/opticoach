@@ -530,13 +530,14 @@ class Preprocessor:
             name="sos_coach_year"
         )
 
-        d1Schools = Series(list(d1_links.keys())).map(school_map)
+        FBSSchools = Series(list(d1_links.keys())).map(school_map).values
+        FCSSchools = Series(list(fcs_links.keys())).map(school_map).values
         proTeams = Series(
             list(nfl_links.keys()) + list(cfl_links.keys()) + list(arenafl_links.keys()) + list(ufl_links.keys()) + list(usfl_links.keys())
-        ).map(school_map)
+        ).map(school_map).values
         otherSchools = Series(
-            list(d2_links.keys()) + list(d3_links.keys()) + list(naia_links.keys()) + list(fcs_links.keys())
-        ).map(school_map)
+            list(d2_links.keys()) + list(d3_links.keys()) + list(naia_links.keys())
+        ).map(school_map).values
 
         skill_school_year = roster_school_year.apply(annual_skill_map, axis=1)
         skilledD1Schools = [school for school in d1Schools if school in skill_school_year.columns]
