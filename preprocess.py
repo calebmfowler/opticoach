@@ -443,7 +443,7 @@ class Preprocessor:
             columns=school_coach_year.columns,
             index=school_coach_year.index
         )
-        schoolInt_coach_year = add_metric(
+        schoolInt_coach_year = add_metric( # x0, X1
             schoolInt_coach_year,
             int,
             0,
@@ -460,7 +460,7 @@ class Preprocessor:
             columns=roleTitle_coach_year.columns,
             index=roleTitle_coach_year.index
         )
-        roleTitleInt_coach_year = add_metric(
+        roleTitleInt_coach_year = add_metric( # x2
             roleTitleInt_coach_year,
             int,
             0,
@@ -473,7 +473,7 @@ class Preprocessor:
         )
 
         roleRank_coach_year = role_coach_year.map(role_rank_map)
-        roleRank_coach_year = add_metric(
+        roleRank_coach_year = add_metric( # x3
             roleRank_coach_year,
             int,
             -1,
@@ -487,7 +487,7 @@ class Preprocessor:
 
         rank_school_year = rank_school_year.apply(to_numeric, errors='coerce')
         rank_coach_year = recolumnate(rank_school_year, school_coach_year)
-        rank_coach_year = add_metric(
+        rank_coach_year = add_metric( # x4
             rank_coach_year,
             int,
             30,
@@ -501,7 +501,7 @@ class Preprocessor:
         )
 
         record_coach_year = recolumnate(record_school_year, school_coach_year)
-        performance_coach_year = add_metric(
+        performance_coach_year = add_metric( # x5, x6, x7
             record_coach_year,
             [float, float, float],              # metricType
             [20., 30., 0.4],                    # defaultValue
@@ -518,7 +518,7 @@ class Preprocessor:
         winRate_coach_year = performance_coach_year.map(win_rate_map)
         avgOpponentWinRate_coach_year = record_coach_year.apply(annual_avg_opponent_win_rate_map, axis=1)
         sos_coach_year = record_coach_year.apply(annual_sos_map, axis=1)
-        sos_coach_year = add_metric(
+        sos_coach_year = add_metric( # x8
             sos_coach_year,
             float,
             0.4,
@@ -545,7 +545,7 @@ class Preprocessor:
         otherSchoolMaxSkill_year = skill_school_year[skilledOtherSchools].max(axis=1)
         roster_coach_year = recolumnate(roster_school_year, school_coach_year)
         talent_coach_year = roster_coach_year.apply(annual_talent_map, axis=1)
-        talent_coach_year = add_metric(
+        talent_coach_year = add_metric( # x9
             talent_coach_year,
             float,
             0.,
@@ -557,25 +557,24 @@ class Preprocessor:
             name='talent_coach_year'
         )
         
-        success_coach_year = winRate_coach_year * sos_coach_year
-        success_coach_year = add_metric(
-            success_coach_year,
-            float,
-            0.16,
-            False,
-            [],
-            False,
-            False,
-            False,
-            name='success_coach_year'
-        )
+        # success_coach_year = winRate_coach_year * sos_coach_year
+        # success_coach_year = add_metric(
+        #     success_coach_year,
+        #     float,
+        #     0.16,
+        #     False,
+        #     [],
+        #     False,
+        #     False,
+        #     False,
+        #     name='success_coach_year'
+        # )
 
         # === PACKAGING METRICS ===
 
         # --- Listing feature and label types ---
 
         XTypes, XEmbeds, XVocabs = [], [], []
-        relevantSchools = Series(list(d1_links.keys()) + list(d2_links.keys())).map(school_map).values
 
         for i, metricType in enumerate(metricTypes):
             if isinstance(metricType, list):
@@ -604,6 +603,8 @@ class Preprocessor:
         # --- Compiling features and labels ---
 
         X, Y = [], []
+        relevantSchools = Series(list(d1_links.keys()) + list(d2_links.keys())).map(school_map).values
+        testCoaches = ['Jimbo Fisher', 'Mike Elko', 'Nick Saban']
 
         for i, coach in enumerate(school_coach_year.columns):
 
@@ -631,7 +632,6 @@ class Preprocessor:
                 
                 print(f"coach {i}, change {changeYear}, ({coach})")
                 XSample, YSample = [], []
-                defaultValueCount = 0
                 for j, metric in enumerate(metrics):
                     backgroundMetric = list(Series(DataFrame(metric).loc[backgroundYears, coach]).values)
                     predictionMetric = list(Series(DataFrame(metric).loc[predictionYears, coach]).values)
@@ -644,55 +644,67 @@ class Preprocessor:
                         ):
                             if subBackground:
                                 XSample.append(subBackgroundMetric)
-                                defaultValueCount += sum(1 for subValue in subBackgroundMetric if subValue == subDefaultValue)
                             if subForesight:
                                 foresightPadding = [subMetricType()] * (self.backgroundYears - self.predictionYears)
                                 XSample.append(foresightPadding + subPredictionMetric)
-                                defaultValueCount += sum(1 for subValue in subPredictionMetric if subValue == subDefaultValue)
                             if subPrediction:
                                 YSample.append(subPredictionMetric)
-                                defaultValueCount += sum(1 for subValue in subPredictionMetric if subValue == subDefaultValue)
                     else:
                         if backgroundMask[j]:
                             XSample.append(backgroundMetric)
-                            defaultValueCount += sum(1 for value in backgroundMetric if value == defaultValues[j])
                         if foresightMask[j]:
                             foresightPadding = [metricTypes[j]()] * (self.backgroundYears - self.predictionYears)
                             XSample.append(foresightPadding + predictionMetric)
-                            defaultValueCount += sum(1 for value in predictionMetric if value == defaultValues[j])
                         if predictionMask[j]:
                             YSample.append(predictionMetric)
-                            defaultValueCount += sum(1 for value in predictionMetric if value == defaultValues[j])
-
-                if defaultValueCount >= 0.5 * (len(XSample) + len(YSample)) * self.backgroundYears:
-                    print("     insufficient data")
-                    continue
 
                 XSample = [list(row) for row in zip(*XSample)]
                 YSample = [list(row) for row in zip(*YSample)]
 
+                if coach in testCoaches:
+                    print(f"Unmasked XSample\n{nparr(XSample)}")
+                    print(f"Unmasked YSample\n{nparr(YSample)}")
+
+                maskedYearCount = 0
                 for t in range(self.backgroundYears):
                     x = 0
-                    defaultCount = 0
+                    default = []
                     for j, defaultValue in enumerate(defaultValues):
                         if isinstance(defaultValue, list):
                             for k, subDefaultValue in enumerate(defaultValue):
-                                if XSample[t][x] == subDefaultValue:
-                                    defaultCount += 1
+                                default.append(XSample[t][x] == subDefaultValue)
                                 x += 1
                         else:
-                            if XSample[t][x] == defaultValue:
-                                defaultCount += 1
+                            default.append(XSample[t][x] == defaultValue)
                             x += 1
-                    if defaultCount >= 3:
+                    if coach in testCoaches:
+                        print(default)
+                        print(f"missing school or role: {any([default[i] for i in [0, 2, 3]])}")
+                        print(f"missing rank and performance: {all([default[i] for i in [4, 5, 6, 7]])}")
+                    if (
+                        any([default[i] for i in [0, 2, 3]]) # missing school or role (coaching enviroment)
+                        or all([default[i] for i in [4, 5, 6, 7]]) # missing rank and performance (coaching performance)
+                    ):
                         XSample[t] = [0 for y in range(len(XSample[t]))]
-                        print(f"     masked t = {t}")
+                        maskedYearCount += 1
                 
+                if coach in testCoaches:
+                    print(f"Masked XSample\n{nparr(XSample)}")
+                    print(f"Masked YSample\n{nparr(YSample)}")
+
+                if maskedYearCount > self.backgroundYears / 3:
+                    if coach in testCoaches:
+                        print(f"Excessive Masking, Tossing Sample")
+                    continue
+
                 X.append(XSample)
                 Y.append(YSample)
 
         X = nparr(X)
         Y = nparr(Y)
+
+        print(f"X {shape(X)}\n{X}")
+        print(f"Y {shape(Y)}\n{Y}")
 
         trainX, validX, trainY, validY = train_test_split(X, Y, test_size=0.2)
 
