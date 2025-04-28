@@ -1,5 +1,6 @@
 from copy import deepcopy
-from keras import Model
+import pydot
+from keras import Model, utils
 from keras.src.callbacks import ReduceLROnPlateau, EarlyStopping
 from keras.src.layers import Input, Embedding, Concatenate, Masking, Lambda, LSTM, Dense, TextVectorization, Normalization
 from keras._tf_keras.keras.models import load_model
@@ -146,8 +147,6 @@ class OpticoachModel:
             metrics=['mse', 'mae']
         )
 
-        model.save(self.__modelFiles['model'])
-
         return model
 
     def train(self):
@@ -217,6 +216,17 @@ class OpticoachModel:
 
         # Save the trained model
         best_model.save(self.__modelFiles['model'])
+
+        # visualize the model structure:
+        utils.plot_model(
+            best_model,
+            to_file="files/Model_Visual.png",
+            rankdir="TB",
+            show_layer_names=False,
+            expand_nested=True,
+            dpi=200,
+            show_layer_activations=True,
+        )
 
         return 
 
