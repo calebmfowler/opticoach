@@ -39,14 +39,6 @@ class Postprocessor:
             raise Exception("Incorrect arguments for Postprocessor.__init__(self, preprocessor, model=None)")
         return
 
-    def get_r2(self, Y, P):
-        """
-        Calculate the R² score for predictions P and true values Y.
-        """
-        ss_res = sum((Y - P) ** 2)  # Residual Sum of Squares
-        ss_tot = sum((Y - mean(Y)) ** 2)  # Total Sum of Squares
-        return 1 - ss_res / ss_tot
-
     def postprocess(self):
         """
         Postprocess the predicted data and calculate R² values for multiple outputs.
@@ -54,9 +46,21 @@ class Postprocessor:
         self.postprocessedFiles = {}
 
         tP = load_pkl(self.__predictedFiles['trainP'])
+        print(f"tP {shape(tP)}")
         vP = load_pkl(self.__predictedFiles['validP'])
+        print(f"vP {shape(vP)}")
         tY = load_pkl(self.__preprocessedFiles['trainY'])
+        print(f"tY {shape(tY)}")
         vY = load_pkl(self.__preprocessedFiles['validY'])
+        print(f"vY {shape(vY)}")
+
+        def get_r2(Y, P):
+            """
+            Calculate the R² score for predictions P and true values Y.
+            """
+            ss_res = sum((Y - P) ** 2)  # Residual Sum of Squares
+            ss_tot = sum((Y - mean(Y)) ** 2)  # Total Sum of Squares
+            return 1 - ss_res / ss_tot
 
         R2Train = []
         R2Valid = []
@@ -64,30 +68,31 @@ class Postprocessor:
         yPredict = []
 
         # Iterate over each output dimension
-        for i in range(shape(tP)[-1]):
+        for i in range(shape(tP)[2]):
             # Extract slices for the current output dimension
-            tYSlice = tY[..., i].flatten()
-            tPSlice = tP[..., i].flatten()
-            vYSlice = vY[..., i].flatten()
-            vPSlice = vP[..., i].flatten()
+            tYSlice = tY[:, :, i].flatten()
+            tPSlice = tP[:, :, i].flatten()
+            vYSlice = vY[:, :, i].flatten()
+            vPSlice = vP[:, :, i].flatten()
 
             # Append true and predicted values for plotting
-            yTrain.extend(tYSlice)
-            yPredict.extend(tPSlice)
+            yTrain.append(tYSlice)
+            yPredict.append(tPSlice)
 
             # Calculate R² for training and validation
-            R2Train.append(self.get_r2(tYSlice, tPSlice))
-            R2Valid.append(self.get_r2(vYSlice, vPSlice))
+            R2Train.append(get_r2(tYSlice, tPSlice))
+            R2Valid.append(get_r2(vYSlice, vPSlice))
 
             # Print R² values
             print(f"R² value for output {i} (train): {R2Train[-1]}")
             print(f"R² value for output {i} (valid): {R2Valid[-1]}")
 
-        # Scatter plot of true vs predicted values
-        plt.figure(figsize=(10, 5))
-        plt.scatter(yTrain, yPredict, alpha=0.5)
-        plt.xlabel("True Values")
-        plt.ylabel("Predicted Values")
-        plt.title("True vs Predicted Values")
-        plt.savefig('my_plot.png')
+            # Scatter plot of true vs predicted values
+            plt.figure(figsize=(10, 5))
+            plt.scatter(yTrain[-1], yPredict[-1], alpha=0.5)
+            plt.xlabel("True Values")
+            plt.ylabel("Predicted Values")
+            plt.title("True vs Predicted Values")
+            plt.savefig('my_plot.png')
+        
         return
