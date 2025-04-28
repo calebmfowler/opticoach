@@ -1,14 +1,15 @@
 from copy import deepcopy
-from keras import Model
+import pydot
+from keras import Model, utils
 from keras.src.callbacks import ReduceLROnPlateau, EarlyStopping
-from keras.src.layers import Input, Embedding, Concatenate, Masking, Lambda, LSTM, Dense, TextVectorization, Normalization
+from keras.src.layers import Input, Embedding, Concatenate, Masking, RepeatVector, LSTM, Dense, TimeDistributed, Lambda
 from keras._tf_keras.keras.models import load_model
 from keras.src.optimizers import Adam
 from keras_tuner import BayesianOptimization, HyperParameters
 import tensorflow as tf
 from numpy import array as nparr, isnan, isinf, nan, newaxis, shape, unique
 from preprocess import Preprocessor
-from slicer import Slicer
+from Expander import Expander
 from utilities import save_pkl, load_pkl
 
 class OpticoachModel:
@@ -98,8 +99,7 @@ class OpticoachModel:
             else:
                 inputLayer = Input((self.__backgroundYears, 1), name=f"input_{i}_num")
                 inputLayers.append(inputLayer)
-                normalizedLayer = Normalization()(inputLayer)
-                numerizedLayers.append(normalizedLayer)
+                numerizedLayers.append(inputLayer)
         
         # Concatenate and normalize the numerical features
         numericalConcatenation = Concatenate()(numerizedLayers)
@@ -107,36 +107,44 @@ class OpticoachModel:
         # In order to accomodate gaps in the data, a masking is used to cover missing time steps 
         # and missing metrics. There will be gaps in the time sequence in which a coach was not 
         # a head coach, and gaps in the metrics if data is not available.
-        maskLayer = Masking(mask_value=0)(numericalConcatenation)
+        maskedInputs = Masking(mask_value=0)(numericalConcatenation)
         
         # In order to handle long-term dependencies we will utilize a Long Short Term-Memory (LSTM)
         # layer. Dropout and regularization are also supplemented in order to avoid overfitting.
         # We use chat's rule of thumb, lstm_units = min(128, max(32, features * 2)).
-        lstmLayer = LSTM(
+        encoderLSTM = LSTM(
             lstm_units,
             dropout=dropout_rate,
             recurrent_dropout=dropout_rate,
             kernel_regularizer='l2',
-            return_sequences=True  # Ensure the LSTM outputs sequences for each time step
-        )(maskLayer)
+            return_state = True
+        )
+        encoderOutputs, stateH, stateC = encoderLSTM(maskedInputs)
 
-        # Slice the LSTM output to keep only the last 3 time steps
-        slicedLayer = Slicer(num_steps=3)(lstmLayer)
+        decoderInput = RepeatVector(3)(stateH)
+        decoderLSTM = LSTM(
+            lstm_units,
+            return_sequences=True,
+            return_state=True
+        )
+        decoderOutputs, _, _ = decoderLSTM(
+            decoderInput,
+            initial_state=[stateH, stateC]
+        )
 
-        # In order to interpret the LSTM output, a Dense layer is added. Dropout is omitted
-        # following this layer because that adds imprecision to regression tasks.
-        hiddenLayer = Dense(
+        # Use the context vector as input to the Dense layer
+        hiddenLayer = TimeDistributed(Dense(
             dense_units,
             activation='relu',
             kernel_regularizer='l2'
-        )(slicedLayer)
+        ))(decoderOutputs)
         
         # Finally, a few key coaching success metrics are trained on and predicted. For the
         # purpose of precise regression, linear activation is used.
-        outputLayer = Dense(
+        outputLayer = TimeDistributed(Dense(
             len(tY[0][0]),
             activation='linear'
-        )(hiddenLayer)
+        ))(hiddenLayer)
 
         model = Model(inputs=inputLayers, outputs=outputLayer)
 
@@ -145,8 +153,6 @@ class OpticoachModel:
             loss='mse',
             metrics=['mse', 'mae']
         )
-
-        model.save(self.__modelFiles['model'])
 
         return model
 
@@ -158,7 +164,7 @@ class OpticoachModel:
         tuner = BayesianOptimization(
             self.__build,
             objective='val_loss',  # Minimize validation loss
-            max_trials=10,  # Number of hyperparameter combinations to try
+            max_trials=20,  # Number of hyperparameter combinations to try
             directory='tuner_results',
             project_name='opticoach_tuning'
         )
@@ -180,12 +186,22 @@ class OpticoachModel:
         vXS = split_features(vX)
 
         # Perform the search
+        learningRateReducer = ReduceLROnPlateau(
+            monitor='val_loss',  # Monitor validation loss
+            factor=0.5,          # Reduce learning rate by a factor of 0.5
+            patience=5,          # Wait for 3 epochs without improvement
+            min_lr=1e-6          # Minimum learning rate
+        )
+
+        earlyStopping = EarlyStopping(monitor='val_loss', patience=5, restore_best_weights=True)
+
         tuner.search(
             tXS, tY,
             validation_data=(vXS, vY),
             epochs=50,
             batch_size=16,
-            verbose=2
+            verbose=2,
+            callbacks=[learningRateReducer, earlyStopping]
         )
 
         # Get the best hyperparameters
@@ -196,14 +212,6 @@ class OpticoachModel:
         best_model = tuner.hypermodel.build(best_hps)
 
         # Define the learning rate reducer callback
-        learningRateReducer = ReduceLROnPlateau(
-            monitor='val_loss',  # Monitor validation loss
-            factor=0.5,          # Reduce learning rate by a factor of 0.5
-            patience=5,          # Wait for 3 epochs without improvement
-            min_lr=1e-6          # Minimum learning rate
-        )
-
-        earlyStopping = EarlyStopping(monitor='val_loss', patience=5, restore_best_weights=True)
 
         # Train the best model with the learning rate reducer
         best_model.fit(
@@ -217,6 +225,17 @@ class OpticoachModel:
 
         # Save the trained model
         best_model.save(self.__modelFiles['model'])
+
+        # visualize the model structure:
+        utils.plot_model(
+            best_model,
+            to_file="files/Model_Visual.png",
+            rankdir="TB",
+            show_layer_names=False,
+            expand_nested=True,
+            dpi=200,
+            show_layer_activations=True,
+        )
 
         return 
 
