@@ -1,8 +1,8 @@
 from copy import deepcopy
-import pydot
+import tensorflow.keras.backend as K
 from keras import Model, utils
 from keras.src.callbacks import ReduceLROnPlateau, EarlyStopping
-from keras.src.layers import Input, Embedding, Concatenate, Masking, Lambda, LSTM, Dense, TextVectorization, Normalization
+from keras.src.layers import Input, Embedding, Concatenate, Masking, Lambda, LSTM, Dense, Permute, Multiply, Normalization, BatchNormalization
 from keras._tf_keras.keras.models import load_model
 from keras.src.optimizers import Adam
 from keras_tuner import BayesianOptimization, HyperParameters
@@ -79,6 +79,7 @@ class OpticoachModel:
         learning_rate = hp.Float('learning_rate', min_value=1e-4, max_value=1e-2, sampling='log')
         
         tY = load_pkl(self.__preprocessedFiles['trainY'])
+        tX = load_pkl(self.__preprocessedFiles['trainX'])
         XEmbeds = load_pkl(self.__preprocessedFiles['XEmbeds'])
         XVocabs = load_pkl(self.__preprocessedFiles['XVocabs'])
 
@@ -99,7 +100,14 @@ class OpticoachModel:
             else:
                 inputLayer = Input((self.__backgroundYears, 1), name=f"input_{i}_num")
                 inputLayers.append(inputLayer)
-                normalizedLayer = Normalization()(inputLayer)
+
+                # Create and adapt the normalization layer
+                normalizationLayer = Normalization()
+                numerical_data = tX[:, :, i].reshape(-1, 1)  # Flatten batch and time dimensions
+                normalizationLayer.adapt(numerical_data)
+
+                # Apply normalization to the input layer
+                normalizedLayer = normalizationLayer(inputLayer)
                 numerizedLayers.append(normalizedLayer)
         
         # Concatenate and normalize the numerical features
@@ -120,9 +128,7 @@ class OpticoachModel:
             kernel_regularizer='l2',
             return_sequences=True  # Ensure the LSTM outputs sequences for each time step
         )(maskLayer)
-
-        # Slice the LSTM output to keep only the last 3 time steps
-        slicedLayer = Slicer(num_steps=3)(lstmLayer)
+        lstmLayer = BatchNormalization()(lstmLayer)
 
         # In order to interpret the LSTM output, a Dense layer is added. Dropout is omitted
         # following this layer because that adds imprecision to regression tasks.
@@ -130,7 +136,7 @@ class OpticoachModel:
             dense_units,
             activation='relu',
             kernel_regularizer='l2'
-        )(slicedLayer)
+        )(lstmLayer)
         
         # Finally, a few key coaching success metrics are trained on and predicted. For the
         # purpose of precise regression, linear activation is used.
@@ -157,7 +163,7 @@ class OpticoachModel:
         tuner = BayesianOptimization(
             self.__build,
             objective='val_loss',  # Minimize validation loss
-            max_trials=10,  # Number of hyperparameter combinations to try
+            max_trials=20,  # Number of hyperparameter combinations to try
             directory='tuner_results',
             project_name='opticoach_tuning'
         )
