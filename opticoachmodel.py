@@ -76,7 +76,6 @@ class OpticoachModel:
         lstm_units = hp.Int('lstm_units', min_value=32, max_value=256, step=32)
         dense_units = hp.Int('dense_units', min_value=32, max_value=128, step=32)
         dropout_rate = hp.Float('dropout_rate', min_value=0.1, max_value=0.5, step=0.1)
-        learning_rate = hp.Float('learning_rate', min_value=1e-4, max_value=1e-2, sampling='log')
         
         tY = load_pkl(self.__preprocessedFiles['trainY'])
         XEmbeds = load_pkl(self.__preprocessedFiles['XEmbeds'])
@@ -149,7 +148,7 @@ class OpticoachModel:
         model = Model(inputs=inputLayers, outputs=outputLayer)
 
         model.compile(
-            optimizer=Adam(learning_rate=learning_rate),
+            optimizer=Adam(),
             loss='mse',
             metrics=['mse', 'mae']
         )

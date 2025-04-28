@@ -321,23 +321,15 @@ class Preprocessor:
                 if not opponentSchool in avgOpponentWinRate_school_year.columns:
                     avgOpponentSos = 0.4
                 else:
-                    opponentCoach = coach_school_year.at[year, opponentSchool]
-                    if not opponentCoach in winRate_coach_year.columns:
-                        avgOpponentSos = 0.4
-                    else:
-                        avgOpponentSos = avgOpponentWinRate_coach_year.at[year, opponentCoach]
+                    avgOpponentSos = avgOpponentWinRate_school_year.at[year, opponentSchool]
             else:
                 gameCount = len(record)
                 for game in record:
                     opponentSchool = str(game[0])
                     if not opponentSchool in avgOpponentWinRate_school_year.columns:
                         avgOpponentSos += 0.4
-                        continue
-                    opponentCoach = coach_school_year.at[year, opponentSchool]
-                    if not opponentCoach in winRate_coach_year.columns:
-                        avgOpponentSos += 0.4
-                        continue
-                    avgOpponentSos += avgOpponentWinRate_coach_year.at[year, opponentCoach]
+                    else:
+                        avgOpponentSos += avgOpponentWinRate_school_year.at[year, opponentSchool]
                 avgOpponentSos /= gameCount
             return 2/3 * teamSos + 1/3 * avgOpponentSos
 
@@ -414,8 +406,6 @@ class Preprocessor:
             else:
                 return -1
             
-        # def
-
         # === METRICS COMPILATION ===
 
         # --- Vocabulary Generation ---
@@ -433,8 +423,6 @@ class Preprocessor:
         roster_school_year = tabulate(rostersJSON, columnDepth=1, indexDepth=0, valueDepth=(2, None))
         roster_school_year = roster_school_year.drop(['', 'fail'], axis=1)
         roster_school_year = map_columns(roster_school_year, school_map)
-
-        # hc_coach_year = tabulate(coachJSON, columnDepth=(3, None), indexDepth=0)
 
         schoolVocabulary = unique(hstack((
             unique(school_coach_year),
@@ -469,6 +457,7 @@ class Preprocessor:
             False,
             name="schoolInt_coach_year"
         )
+        print(schoolInt_coach_year['Jimbo Fisher'])
 
         roleTitleInt_coach_year = DataFrame(
             roleTitleVectorization(roleTitle_coach_year),
@@ -486,6 +475,7 @@ class Preprocessor:
             False,
             name="roleTitleInt_coach_year"
         )
+        print(roleTitleInt_coach_year['Jimbo Fisher'])
 
         roleRank_coach_year = add_metric( # x3
             role_coach_year,
@@ -499,6 +489,7 @@ class Preprocessor:
             map=role_rank_map,
             name="roleRank_coach_year"
         )
+        print(roleRank_coach_year['Jimbo Fisher'])
 
         '''rank_school_year = rank_school_year.apply(to_numeric, errors='coerce')
         rank_coach_year = recolumnate(rank_school_year, school_coach_year)
@@ -524,10 +515,11 @@ class Preprocessor:
             [[], [], []],                       # vocabularies
             [True, True, True],                 # backgroundMask
             [False, False, False],              # foresightMask
-            [False, False, True],               # predictionMask
+            [True, True, False],                # predictionMask
             map=performance_map,
             name="performance_coach_year"
         )
+        print(performance_coach_year['Jimbo Fisher'])
 
         performance_school_year = record_school_year.map(performance_map)
         winRate_school_year = performance_school_year.map(win_rate_map)
@@ -544,6 +536,7 @@ class Preprocessor:
             False,
             name="sos_coach_year"
         )
+        print(sos_coach_year['Jimbo Fisher'])
 
         proTeams = Series(
             list(nfl_links.keys()) + list(cfl_links.keys()) + list(arenafl_links.keys()) + list(ufl_links.keys()) + list(usfl_links.keys())
@@ -574,6 +567,7 @@ class Preprocessor:
             False,
             name='talent_coach_year'
         )
+        print(talent_coach_year['Jimbo Fisher'])
 
         level_coach_year = add_metric( # x9, x10
             school_coach_year,
@@ -587,32 +581,22 @@ class Preprocessor:
             map=level_map,
             name='level_coach_year'
         )
-
-        # level_coach_year = add_metric( # x12
-        #     coach_hc_year,
-        #     int,
-        #     -1,
-        #     True,
-        #     [-1, 0, 1, 2, 3],
-        #     True,
-        #     True,
-        #     False,
-        #     map=level_map,
-        #     name='level_coach_year'
-        # )
-         
-        # success_coach_year = winRate_coach_year * sos_coach_year
-        # success_coach_year = add_metric(
-        #     success_coach_year,
-        #     float,
-        #     0.16,
-        #     False,
-        #     [],
-        #     False,
-        #     False,
-        #     False,
-        #     name='success_coach_year'
-        # )
+        print(level_coach_year['Jimbo Fisher'])
+        
+        winRate_coach_year = performance_coach_year.map(win_rate_map)
+        success_coach_year = winRate_coach_year * sos_coach_year
+        success_coach_year = add_metric(
+            success_coach_year,
+            float,
+            0.16,
+            False,
+            [],
+            False,
+            False,
+            True,
+            name='success_coach_year'
+        )
+        print(success_coach_year['Jimbo Fisher'])
 
         # === PACKAGING METRICS ===
 
@@ -732,7 +716,7 @@ class Preprocessor:
                         print(default)
                         print(any([default[i] for i in [0, 2, 3, 9]]))
                         print(all([default[i] for i in [5, 6, 7]]))
-                        print(t >= self.backgroundYears - self.predictionYears and any(default[i] for i in [1, 11]))
+                        print(t >= self.backgroundYears - self.predictionYears and any(default[i] for i in [1, 10]))
                     if (
                         any([default[i] for i in [0, 2, 3, 9]]) # missing background school, role, or level (coaching enviroment)
                         or all([default[i] for i in [5, 6, 7]]) # missing background rank and performance (coaching performance)
