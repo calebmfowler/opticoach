@@ -212,7 +212,7 @@ class Preprocessor:
                     roleTitle = roleTitle[:i]
                 if roleTitle == 'HC':
                     return [roleTitle, 0]
-                elif roleTitle in ['OC', 'DC', 'ST', 'PGC', 'RGC']:
+                elif roleTitle in ['OC', 'DC', 'ST', 'PGC', 'RGC', 'co-OC', 'co-DC']:
                     return [roleTitle, 1]
                 else:
                     return [roleTitle, 2]
@@ -284,6 +284,8 @@ class Preprocessor:
                 if not opponentSchool in coach_school_year.columns:
                     return 0.4
                 opponentCoach = coach_school_year.at[year, opponentSchool]
+                if type(opponentCoach) == list:
+                        opponentCoach = opponentCoach[0]
                 if not opponentCoach in winRate_coach_year.columns:
                     return 0.4
                 avgOpponentWinRate = winRate_coach_year.at[year, opponentCoach]
@@ -298,6 +300,8 @@ class Preprocessor:
                         avgOpponentWinRate += 0.4
                         continue
                     opponentCoach = coach_school_year.at[year, opponentSchool]
+                    if type(opponentCoach) == list:
+                        opponentCoach = opponentCoach[0]
                     if not opponentCoach in winRate_coach_year.columns:
                         avgOpponentWinRate += 0.4
                         continue
@@ -327,6 +331,8 @@ class Preprocessor:
                     avgOpponentSos = 0.4
                 else:
                     opponentCoach = coach_school_year.at[year, opponentSchool]
+                    if type(opponentCoach) == list:
+                        opponentCoach = opponentCoach[0]
                     if not opponentCoach in winRate_coach_year.columns:
                         avgOpponentSos = 0.4
                     else:
@@ -339,12 +345,13 @@ class Preprocessor:
                         avgOpponentSos += 0.4
                         continue
                     opponentCoach = coach_school_year.at[year, opponentSchool]
+                    if type(opponentCoach) == list:
+                        opponentCoach = opponentCoach[0]
                     if not opponentCoach in winRate_coach_year.columns:
                         avgOpponentSos += 0.4
                         continue
                     avgOpponentSos += avgOpponentWinRate_coach_year.at[year, opponentCoach]
                 avgOpponentSos /= gameCount
-                
             return 2/3 * teamSos + 1/3 * avgOpponentSos
 
         def annual_sos_map(season):
@@ -419,12 +426,14 @@ class Preprocessor:
                 return 3
             else:
                 return -1
+            
+        # def
 
         # === METRICS COMPILATION ===
 
         # --- Vocabulary Generation ---
 
-        school_coach_year = tabulate(coachJSON, columnDepth=3, indexDepth=0, valueDepth=1)
+        school_coach_year = tabulate(coachJSON, columnDepth=(3, None), indexDepth=0, valueDepth=1)
         school_coach_year = school_coach_year.map(school_map)
 
         rank_school_year = tabulate(pollsJSON, columnDepth=(2, None), indexDepth=0, valueDepth=1)
@@ -437,6 +446,8 @@ class Preprocessor:
         roster_school_year = roster_school_year.drop(['', 'fail'], axis=1)
         roster_school_year = map_columns(roster_school_year, school_map)
 
+        # hc_coach_year = tabulate(coachJSON, columnDepth=(3, None), indexDepth=0)
+
         schoolVocabulary = unique(hstack((
             unique(school_coach_year),
             rank_school_year.columns,
@@ -446,7 +457,7 @@ class Preprocessor:
         schoolVocabulary = insert(schoolVocabulary[1:], 0, ['', '[UNK]'])
         schoolVectorization = TextVectorization(standardize=None, split=None, vocabulary=schoolVocabulary)
 
-        role_coach_year = tabulate(coachJSON, columnDepth=3, indexDepth=0, valueDepth=2)
+        role_coach_year = tabulate(coachJSON, columnDepth=(3, None), indexDepth=0, valueDepth=2)
         role_coach_year = role_coach_year.map(role_map)
         roleTitle_coach_year = role_coach_year.map(role_title_map)
         roleTitleVocabulary = insert(unique(roleTitle_coach_year)[1:], 0, ['', '[UNK]'])
@@ -530,7 +541,7 @@ class Preprocessor:
             name="performance_coach_year"
         )
 
-        coach_school_year = tabulate(coachJSON, columnDepth=1, indexDepth=0, valueDepth=3)
+        coach_school_year = tabulate(coachJSON, columnDepth=1, indexDepth=0, valueDepth=(3, None))
         winRate_coach_year = performance_coach_year.map(win_rate_map)
         avgOpponentWinRate_coach_year = record_coach_year.apply(annual_avg_opponent_win_rate_map, axis=1)
         sos_coach_year = record_coach_year.apply(annual_sos_map, axis=1)
@@ -588,6 +599,19 @@ class Preprocessor:
             map=level_map,
             name='level_coach_year'
         )
+
+        # level_coach_year = add_metric( # x12
+        #     coach_hc_year,
+        #     int,
+        #     -1,
+        #     True,
+        #     [-1, 0, 1, 2, 3],
+        #     True,
+        #     True,
+        #     False,
+        #     map=level_map,
+        #     name='level_coach_year'
+        # )
          
         # success_coach_year = winRate_coach_year * sos_coach_year
         # success_coach_year = add_metric(
