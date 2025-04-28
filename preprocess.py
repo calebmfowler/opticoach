@@ -271,6 +271,12 @@ class Preprocessor:
 
                 return [scoringOffense, scoringDefense, winRate]
 
+        def offense_map(performance):
+            return performance[0]
+        
+        def defense_map(performance):
+            return performance[1]
+
         def win_rate_map(performance):
             return performance[2]
 
@@ -532,7 +538,7 @@ class Preprocessor:
             [[], [], []],                       # vocabularies
             [True, True, True],                 # backgroundMask
             [False, False, False],              # foresightMask
-            [True, True, False],                # predictionMask
+            [False, False, True],               # predictionMask
             map=performance_map,
             name="performance_coach_year"
         )
@@ -600,20 +606,26 @@ class Preprocessor:
         )
         print(level_coach_year['Jimbo Fisher'])
         
-        '''winRate_coach_year = performance_coach_year.map(win_rate_map)
-        success_coach_year = winRate_coach_year * sos_coach_year
+        winRate_coach_year = performance_coach_year.map(win_rate_map)
+        offense_coach_year = performance_coach_year.map(offense_map)
+        defense_coach_year = performance_coach_year.map(defense_map)
+        difference_coach_year = offense_coach_year - defense_coach_year
+        maxDifference = difference_coach_year.max().max()
+        print(f"{maxDifference} ({type(maxDifference)})")
+        normalizedDifference_coach_year = difference_coach_year.map(lambda diff : diff / maxDifference)
+        success_coach_year = (winRate_coach_year + normalizedDifference_coach_year) * sos_coach_year / (1 + 0.625 * talent_coach_year)
         success_coach_year = add_metric(
             success_coach_year,
             float,
             0.16,
             False,
             [],
-            False,
+            True,
             False,
             True,
             name='success_coach_year'
         )
-        print(success_coach_year['Jimbo Fisher'])'''
+        print(success_coach_year['Jimbo Fisher'])
 
         # === PACKAGING METRICS ===
 
