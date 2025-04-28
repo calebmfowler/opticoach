@@ -1,5 +1,5 @@
 from copy import deepcopy
-import tensorflow.keras.backend as K
+import keras.src.backend as K
 from keras import Model, utils
 from keras.src.callbacks import ReduceLROnPlateau, EarlyStopping
 from keras.src.layers import Input, Embedding, Concatenate, Masking, RepeatVector, LSTM, Dense, TimeDistributed, Lambda, BatchNormalization
