@@ -75,7 +75,6 @@ class OpticoachModel:
         lstm_units = hp.Int('lstm_units', min_value=128, max_value=256, step=32)
         dense_units = hp.Int('dense_units', min_value=125, max_value=256, step=32)
         dropout_rate = hp.Float('dropout_rate', min_value=0.1, max_value=0.5, step=0.1)
-        learning_rate = hp.Float('learning_rate', min_value=1e-5, max_value=0.002, sampling='log')
         
         tY = load_pkl(self.__preprocessedFiles['trainY'])
         tX = load_pkl(self.__preprocessedFiles['trainX'])
@@ -138,23 +137,23 @@ class OpticoachModel:
         
         # Finally, a few key coaching success metrics are trained on and predicted. For the
         # purpose of precise regression, linear activation is used.
-        outputLayer = Dense(
+        outputLayer = TimeDistributed(Dense(
             len(tY[0][0]),
             activation='linear'
-        )(hiddenLayer)
+        ))(hiddenLayer)
         print(f"shape(outputLayer) = {shape(outputLayer)}")
 
         model = Model(inputs=inputLayers, outputs=outputLayer)
 
         model.compile(
-            optimizer=Adam(learning_rate = learning_rate),
+            optimizer=Adam(),
             loss='mse',
             metrics=['mse', 'mae']
         )
 
         return model
 
-    def build_and_train_with_hyper_params(self):
+    def train_with_hyper_params(self):
         '''
         Train the recurrent neural network.
         '''
@@ -312,8 +311,8 @@ class OpticoachModel:
         # We use chat's rule of thumb, lstm_units = min(128, max(32, features * 2)).
         lstmLayer = LSTM(
             128,
-            dropout=0.25,
-            recurrent_dropout=0.25,
+            dropout=0.1,
+            recurrent_dropout=0.1,
             kernel_regularizer='l2',
             return_sequences=False  # Output a single vector for the entire sequence
         )(maskedInputs)
