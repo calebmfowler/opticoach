@@ -73,8 +73,8 @@ class OpticoachModel:
         '''
 
         # Define hyperparameters to tune
-        lstm_units = hp.Int('lstm_units', min_value=32, max_value=256, step=32)
-        dense_units = hp.Int('dense_units', min_value=32, max_value=128, step=32)
+        lstm_units = hp.Int('lstm_units', min_value=128, max_value=256, step=32)
+        dense_units = hp.Int('dense_units', min_value=125, max_value=256, step=32)
         dropout_rate = hp.Float('dropout_rate', min_value=0.1, max_value=0.5, step=0.1)
         
         tY = load_pkl(self.__preprocessedFiles['trainY'])
@@ -163,7 +163,7 @@ class OpticoachModel:
         tuner = BayesianOptimization(
             self.__build,
             objective='val_loss',  # Minimize validation loss
-            max_trials=20,  # Number of hyperparameter combinations to try
+            max_trials=5,  # Number of hyperparameter combinations to try
             directory='tuner_results',
             project_name='opticoach_tuning'
         )
