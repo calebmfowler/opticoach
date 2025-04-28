@@ -55,17 +55,15 @@ class Postprocessor:
         yTrain = []
         yPredict = []
 
-        for i in range(shape(tP)[-1]):  # Iterate over each output
+        for i in range(shape(tP)[2]):  # Iterate over each output
             def get_r2(Y, P):
-                YSlice = Y[..., i].flatten()
-                PSlice = P[..., i].flatten()
-                # for j in range(len(YSlice)):
-                #     print(YSlice[j], PSlice[j])
+                YSlice = Y[:, :, i].flatten()
+                PSlice = P[:, :, i].flatten()
                 ss_res_train = sum((YSlice - PSlice)**2)  # Residual Sum of Squares
                 ss_tot_train = sum((YSlice - mean(YSlice))**2)  # Total Sum of Squares
                 return 1 - ss_res_train / ss_tot_train
-            YSlice = tY[..., i].flatten()
-            PSlice = tP[..., i].flatten()
+            YSlice = tY[:, :, i].flatten()
+            PSlice = tP[:, :, i].flatten()
             for j in range(len(YSlice)):
                 yTrain.append(YSlice[j])
                 yPredict.append(PSlice[j])
