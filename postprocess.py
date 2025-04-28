@@ -39,7 +39,7 @@ class Postprocessor:
             raise Exception("Incorrect arguments for Postprocessor.__init__(self, preprocessor, model=None)")
         return
 
-    def get_r2(Y, P):
+    def get_r2(self, Y, P):
         """
         Calculate the R² score for predictions P and true values Y.
         """
@@ -76,8 +76,8 @@ class Postprocessor:
             yPredict.extend(tPSlice)
 
             # Calculate R² for training and validation
-            R2Train.append(get_r2(tYSlice, tPSlice))
-            R2Valid.append(get_r2(vYSlice, vPSlice))
+            R2Train.append(self.get_r2(tYSlice, tPSlice))
+            R2Valid.append(self.get_r2(vYSlice, vPSlice))
 
             # Print R² values
             print(f"R² value for output {i} (train): {R2Train[-1]}")
