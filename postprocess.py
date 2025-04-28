@@ -90,9 +90,10 @@ class Postprocessor:
             # Scatter plot of true vs predicted values
             plt.figure(figsize=(10, 5))
             plt.scatter(yTrain[-1], yPredict[-1], alpha=0.5)
+            plt.plot(yTrain[-1], yTrain[-1], 'r')
             plt.xlabel("True Values")
             plt.ylabel("Predicted Values")
             plt.title("True vs Predicted Values")
-            plt.savefig('my_plot.png')
+            plt.savefig(f'trueVpred_{i}.png')
         
         return

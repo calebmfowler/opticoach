@@ -538,7 +538,7 @@ class Preprocessor:
             [[], [], []],                       # vocabularies
             [True, True, True],                 # backgroundMask
             [False, False, False],              # foresightMask
-            [False, False, True],               # predictionMask
+            [True, True, True],               # predictionMask
             map=performance_map,
             name="performance_coach_year"
         )
@@ -613,7 +613,7 @@ class Preprocessor:
         maxDifference = difference_coach_year.max().max()
         print(f"{maxDifference} ({type(maxDifference)})")
         normalizedDifference_coach_year = difference_coach_year.map(lambda diff : diff / maxDifference)
-        success_coach_year = (winRate_coach_year + normalizedDifference_coach_year) * sos_coach_year / (1 + 0.625 * talent_coach_year)
+        success_coach_year = (0.5 * winRate_coach_year + 0.5 * normalizedDifference_coach_year) * sos_coach_year / (1 + 0.125 * talent_coach_year)
         success_coach_year = add_metric(
             success_coach_year,
             float,
