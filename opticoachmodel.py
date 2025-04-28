@@ -1,8 +1,8 @@
 from copy import deepcopy
-import pydot
+import tensorflow.keras.backend as K
 from keras import Model, utils
 from keras.src.callbacks import ReduceLROnPlateau, EarlyStopping
-from keras.src.layers import Input, Embedding, Concatenate, Masking, RepeatVector, LSTM, Dense, TimeDistributed, Lambda
+from keras.src.layers import Input, Embedding, Concatenate, Masking, RepeatVector, LSTM, Dense, TimeDistributed, Lambda, BatchNormalization
 from keras._tf_keras.keras.models import load_model
 from keras.src.optimizers import Adam
 from keras_tuner import BayesianOptimization, HyperParameters
@@ -78,6 +78,7 @@ class OpticoachModel:
         dropout_rate = hp.Float('dropout_rate', min_value=0.1, max_value=0.5, step=0.1)
         
         tY = load_pkl(self.__preprocessedFiles['trainY'])
+        tX = load_pkl(self.__preprocessedFiles['trainX'])
         XEmbeds = load_pkl(self.__preprocessedFiles['XEmbeds'])
         XVocabs = load_pkl(self.__preprocessedFiles['XVocabs'])
 
@@ -116,27 +117,17 @@ class OpticoachModel:
             dropout=dropout_rate,
             recurrent_dropout=dropout_rate,
             kernel_regularizer='l2',
-            return_state = True
-        )
-        encoderOutputs, stateH, stateC = encoderLSTM(maskedInputs)
+            return_sequences=True  # Ensure the LSTM outputs sequences for each time step
+        )(maskedInputs)
+        lstmLayer = BatchNormalization()(encoderLSTM)
 
-        decoderInput = RepeatVector(3)(stateH)
-        decoderLSTM = LSTM(
-            lstm_units,
-            return_sequences=True,
-            return_state=True
-        )
-        decoderOutputs, _, _ = decoderLSTM(
-            decoderInput,
-            initial_state=[stateH, stateC]
-        )
-
-        # Use the context vector as input to the Dense layer
-        hiddenLayer = TimeDistributed(Dense(
+        # In order to interpret the LSTM output, a Dense layer is added. Dropout is omitted
+        # following this layer because that adds imprecision to regression tasks.
+        hiddenLayer = Dense(
             dense_units,
             activation='relu',
             kernel_regularizer='l2'
-        ))(decoderOutputs)
+        )(lstmLayer)
         
         # Finally, a few key coaching success metrics are trained on and predicted. For the
         # purpose of precise regression, linear activation is used.

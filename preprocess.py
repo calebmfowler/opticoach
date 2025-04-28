@@ -306,6 +306,23 @@ class Preprocessor:
                 recordFeaturesDict[school] = avg_opponent_win_rate_map(season[school], school, year)
             return Series(recordFeaturesDict)
 
+        # def head_coach_map(coach, year):
+        #     try:
+        #         head_coach = coachJSON[year][school]['HC']
+        #         if type(head_coach) == list:
+        #             head_coach = head_coach[0]
+        #     except:
+        #         head_coach = 'NaN'
+        #     return head_coach
+        
+        # def annual_head_coach_map(coach):
+        #     season = Series(season)
+        #     year = int(season.name)
+        #     headcoachDict = {}
+        #     for coach in season.index:
+        #         headcoachDict[coach] = head_coach_map(season[coach], year)
+        #     return Series(headcoachDict)
+
         def sos_map(record, year, coach):
             if record != record or record == [] or not isinstance(record, list):
                 return 0.4
