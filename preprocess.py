@@ -600,7 +600,7 @@ class Preprocessor:
         )
         print(level_coach_year['Jimbo Fisher'])
         
-        winRate_coach_year = performance_coach_year.map(win_rate_map)
+        '''winRate_coach_year = performance_coach_year.map(win_rate_map)
         success_coach_year = winRate_coach_year * sos_coach_year
         success_coach_year = add_metric(
             success_coach_year,
@@ -613,7 +613,7 @@ class Preprocessor:
             True,
             name='success_coach_year'
         )
-        print(success_coach_year['Jimbo Fisher'])
+        print(success_coach_year['Jimbo Fisher'])'''
 
         # === PACKAGING METRICS ===
 
