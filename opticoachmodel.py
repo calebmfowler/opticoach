@@ -2,14 +2,14 @@ from copy import deepcopy
 import tensorflow.keras.backend as K
 from keras import Model, utils
 from keras.src.callbacks import ReduceLROnPlateau, EarlyStopping
-from keras.src.layers import Input, Embedding, Concatenate, Masking, Lambda, LSTM, Dense, Permute, Multiply, Normalization, BatchNormalization
+from keras.src.layers import Input, Embedding, Concatenate, Masking, RepeatVector, LSTM, Dense, TimeDistributed, Lambda, BatchNormalization
 from keras._tf_keras.keras.models import load_model
 from keras.src.optimizers import Adam
 from keras_tuner import BayesianOptimization, HyperParameters
 import tensorflow as tf
 from numpy import array as nparr, isnan, isinf, nan, newaxis, shape, unique
 from preprocess import Preprocessor
-from slicer import Slicer
+from Expander import Expander
 from utilities import save_pkl, load_pkl
 
 class OpticoachModel:
@@ -100,15 +100,7 @@ class OpticoachModel:
             else:
                 inputLayer = Input((self.__backgroundYears, 1), name=f"input_{i}_num")
                 inputLayers.append(inputLayer)
-
-                # Create and adapt the normalization layer
-                normalizationLayer = Normalization()
-                numerical_data = tX[:, :, i].reshape(-1, 1)  # Flatten batch and time dimensions
-                normalizationLayer.adapt(numerical_data)
-
-                # Apply normalization to the input layer
-                normalizedLayer = normalizationLayer(inputLayer)
-                numerizedLayers.append(normalizedLayer)
+                numerizedLayers.append(inputLayer)
         
         # Concatenate and normalize the numerical features
         numericalConcatenation = Concatenate()(numerizedLayers)
@@ -116,19 +108,19 @@ class OpticoachModel:
         # In order to accomodate gaps in the data, a masking is used to cover missing time steps 
         # and missing metrics. There will be gaps in the time sequence in which a coach was not 
         # a head coach, and gaps in the metrics if data is not available.
-        maskLayer = Masking(mask_value=0)(numericalConcatenation)
+        maskedInputs = Masking(mask_value=0)(numericalConcatenation)
         
         # In order to handle long-term dependencies we will utilize a Long Short Term-Memory (LSTM)
         # layer. Dropout and regularization are also supplemented in order to avoid overfitting.
         # We use chat's rule of thumb, lstm_units = min(128, max(32, features * 2)).
-        lstmLayer = LSTM(
+        encoderLSTM = LSTM(
             lstm_units,
             dropout=dropout_rate,
             recurrent_dropout=dropout_rate,
             kernel_regularizer='l2',
             return_sequences=True  # Ensure the LSTM outputs sequences for each time step
-        )(maskLayer)
-        lstmLayer = BatchNormalization()(lstmLayer)
+        )(maskedInputs)
+        lstmLayer = BatchNormalization()(encoderLSTM)
 
         # In order to interpret the LSTM output, a Dense layer is added. Dropout is omitted
         # following this layer because that adds imprecision to regression tasks.
@@ -140,10 +132,10 @@ class OpticoachModel:
         
         # Finally, a few key coaching success metrics are trained on and predicted. For the
         # purpose of precise regression, linear activation is used.
-        outputLayer = Dense(
+        outputLayer = TimeDistributed(Dense(
             len(tY[0][0]),
             activation='linear'
-        )(hiddenLayer)
+        ))(hiddenLayer)
 
         model = Model(inputs=inputLayers, outputs=outputLayer)
 
@@ -185,12 +177,22 @@ class OpticoachModel:
         vXS = split_features(vX)
 
         # Perform the search
+        learningRateReducer = ReduceLROnPlateau(
+            monitor='val_loss',  # Monitor validation loss
+            factor=0.5,          # Reduce learning rate by a factor of 0.5
+            patience=5,          # Wait for 3 epochs without improvement
+            min_lr=1e-6          # Minimum learning rate
+        )
+
+        earlyStopping = EarlyStopping(monitor='val_loss', patience=5, restore_best_weights=True)
+
         tuner.search(
             tXS, tY,
             validation_data=(vXS, vY),
             epochs=50,
             batch_size=16,
-            verbose=2
+            verbose=2,
+            callbacks=[learningRateReducer, earlyStopping]
         )
 
         # Get the best hyperparameters
@@ -201,14 +203,6 @@ class OpticoachModel:
         best_model = tuner.hypermodel.build(best_hps)
 
         # Define the learning rate reducer callback
-        learningRateReducer = ReduceLROnPlateau(
-            monitor='val_loss',  # Monitor validation loss
-            factor=0.5,          # Reduce learning rate by a factor of 0.5
-            patience=5,          # Wait for 3 epochs without improvement
-            min_lr=1e-6          # Minimum learning rate
-        )
-
-        earlyStopping = EarlyStopping(monitor='val_loss', patience=5, restore_best_weights=True)
 
         # Train the best model with the learning rate reducer
         best_model.fit(

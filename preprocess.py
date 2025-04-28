@@ -271,24 +271,19 @@ class Preprocessor:
 
                 return [scoringOffense, scoringDefense, winRate]
 
-        def win_rate_map(record):
-            return record[2]
+        def win_rate_map(performance):
+            return performance[2]
 
-        def avg_opponent_win_rate_map(record, year):
+        def avg_opponent_win_rate_map(record, school, year):
             if record != record or record == [] or not isinstance(record, list):
                 return 0.4
-            
+
             if not isinstance(record[0], list):
                 game = record
                 opponentSchool = str(game[0])
-                if not opponentSchool in coach_school_year.columns:
+                if not opponentSchool in winRate_school_year.columns:
                     return 0.4
-                opponentCoach = coach_school_year.at[year, opponentSchool]
-                if type(opponentCoach) == list:
-                        opponentCoach = opponentCoach[0]
-                if not opponentCoach in winRate_coach_year.columns:
-                    return 0.4
-                avgOpponentWinRate = winRate_coach_year.at[year, opponentCoach]
+                avgOpponentWinRate = winRate_school_year.at[year, opponentSchool]
                 return avgOpponentWinRate
 
             else:
@@ -296,16 +291,10 @@ class Preprocessor:
                 avgOpponentWinRate = 0
                 for game in record:
                     opponentSchool = str(game[0])
-                    if not opponentSchool in coach_school_year.columns:
+                    if not opponentSchool in winRate_school_year.columns:
                         avgOpponentWinRate += 0.4
                         continue
-                    opponentCoach = coach_school_year.at[year, opponentSchool]
-                    if type(opponentCoach) == list:
-                        opponentCoach = opponentCoach[0]
-                    if not opponentCoach in winRate_coach_year.columns:
-                        avgOpponentWinRate += 0.4
-                        continue
-                    avgOpponentWinRate += winRate_coach_year.at[year, opponentCoach]
+                    avgOpponentWinRate += winRate_school_year.at[year, opponentSchool]
                 avgOpponentWinRate /= gameCount
                 return avgOpponentWinRate
         
@@ -313,26 +302,26 @@ class Preprocessor:
             season = Series(season)
             year = int(season.name)
             recordFeaturesDict = {}
-            for coach in season.index:
-                recordFeaturesDict[coach] = avg_opponent_win_rate_map(season[coach], year)
+            for school in season.index:
+                recordFeaturesDict[school] = avg_opponent_win_rate_map(season[school], school, year)
             return Series(recordFeaturesDict)
 
         def sos_map(record, year, coach):
             if record != record or record == [] or not isinstance(record, list):
                 return 0.4
             
-            teamSos = avgOpponentWinRate_coach_year.at[year, coach]
+            school = school_coach_year.at[year, coach]
+
+            teamSos = avgOpponentWinRate_school_year.at[year, school]
 
             avgOpponentSos = 0
             if not isinstance(record[0], list):
                 game = record
                 opponentSchool = str(game[0])
-                if not opponentSchool in coach_school_year.columns:
+                if not opponentSchool in avgOpponentWinRate_school_year.columns:
                     avgOpponentSos = 0.4
                 else:
                     opponentCoach = coach_school_year.at[year, opponentSchool]
-                    if type(opponentCoach) == list:
-                        opponentCoach = opponentCoach[0]
                     if not opponentCoach in winRate_coach_year.columns:
                         avgOpponentSos = 0.4
                     else:
@@ -341,12 +330,10 @@ class Preprocessor:
                 gameCount = len(record)
                 for game in record:
                     opponentSchool = str(game[0])
-                    if not opponentSchool in coach_school_year.columns:
+                    if not opponentSchool in avgOpponentWinRate_school_year.columns:
                         avgOpponentSos += 0.4
                         continue
                     opponentCoach = coach_school_year.at[year, opponentSchool]
-                    if type(opponentCoach) == list:
-                        opponentCoach = opponentCoach[0]
                     if not opponentCoach in winRate_coach_year.columns:
                         avgOpponentSos += 0.4
                         continue
@@ -434,6 +421,7 @@ class Preprocessor:
         # --- Vocabulary Generation ---
 
         school_coach_year = tabulate(coachJSON, columnDepth=(3, None), indexDepth=0, valueDepth=1)
+        school_coach_year = tabulate(coachJSON, columnDepth=(3, None), indexDepth=0, valueDepth=1)
         school_coach_year = school_coach_year.map(school_map)
 
         rank_school_year = tabulate(pollsJSON, columnDepth=(2, None), indexDepth=0, valueDepth=1)
@@ -512,7 +500,7 @@ class Preprocessor:
             name="roleRank_coach_year"
         )
 
-        rank_school_year = rank_school_year.apply(to_numeric, errors='coerce')
+        '''rank_school_year = rank_school_year.apply(to_numeric, errors='coerce')
         rank_coach_year = recolumnate(rank_school_year, school_coach_year)
         rank_coach_year = add_metric( # x4
             rank_coach_year,
@@ -525,10 +513,10 @@ class Preprocessor:
             False,
             rank_map,
             "rank_coach_year"
-        )
+        )'''
 
         record_coach_year = recolumnate(record_school_year, school_coach_year)
-        performance_coach_year = add_metric( # x5, x6, x7
+        performance_coach_year = add_metric( # x4, x5, x6
             record_coach_year,
             [float, float, float],              # metricType
             [20., 30., 0.4],                    # defaultValue
@@ -541,11 +529,11 @@ class Preprocessor:
             name="performance_coach_year"
         )
 
-        coach_school_year = tabulate(coachJSON, columnDepth=1, indexDepth=0, valueDepth=(3, None))
-        winRate_coach_year = performance_coach_year.map(win_rate_map)
-        avgOpponentWinRate_coach_year = record_coach_year.apply(annual_avg_opponent_win_rate_map, axis=1)
+        performance_school_year = record_school_year.map(performance_map)
+        winRate_school_year = performance_school_year.map(win_rate_map)
+        avgOpponentWinRate_school_year = record_school_year.apply(annual_avg_opponent_win_rate_map, axis=1)
         sos_coach_year = record_coach_year.apply(annual_sos_map, axis=1)
-        sos_coach_year = add_metric( # x8
+        sos_coach_year = add_metric( # x7
             sos_coach_year,
             float,
             0.4,
@@ -575,7 +563,7 @@ class Preprocessor:
         otherSchoolMaxSkill_year = skill_school_year[skilledOtherSchools].max(axis=1)
         roster_coach_year = recolumnate(roster_school_year, school_coach_year)
         talent_coach_year = roster_coach_year.apply(annual_talent_map, axis=1)
-        talent_coach_year = add_metric( # x9
+        talent_coach_year = add_metric( # x8
             talent_coach_year,
             float,
             0.,
@@ -587,7 +575,7 @@ class Preprocessor:
             name='talent_coach_year'
         )
 
-        level_coach_year = add_metric( # x10, x11
+        level_coach_year = add_metric( # x9, x10
             school_coach_year,
             int,
             -1,
@@ -700,7 +688,7 @@ class Preprocessor:
                             if subBackground:
                                 XSample.append(subBackgroundMetric)
                             if subForesight:
-                                foresightPadding = [subMetricType()] * (self.backgroundYears - self.predictionYears)
+                                foresightPadding = [subDefaultValue] * (self.backgroundYears - self.predictionYears)
                                 XSample.append(foresightPadding + subPredictionMetric)
                             if subPrediction:
                                 YSample.append(subPredictionMetric)
@@ -708,7 +696,7 @@ class Preprocessor:
                         if backgroundMask[j]:
                             XSample.append(backgroundMetric)
                         if foresightMask[j]:
-                            foresightPadding = [metricTypes[j]()] * (self.backgroundYears - self.predictionYears)
+                            foresightPadding = [defaultValues[j]] * (self.backgroundYears - self.predictionYears)
                             XSample.append(foresightPadding + predictionMetric)
                         if predictionMask[j]:
                             YSample.append(predictionMetric)
@@ -742,14 +730,14 @@ class Preprocessor:
                                 x += 1
                     if coach in testCoaches:
                         print(default)
-                        print(any([default[i] for i in [0, 2, 3, 10]]))
-                        print(all([default[i] for i in [4, 5, 6, 7]]))
+                        print(any([default[i] for i in [0, 2, 3, 9]]))
+                        print(all([default[i] for i in [5, 6, 7]]))
                         print(t >= self.backgroundYears - self.predictionYears and any(default[i] for i in [1, 11]))
                     if (
-                        any([default[i] for i in [0, 2, 3, 10]]) # missing background school, role, or level (coaching enviroment)
-                        or all([default[i] for i in [4, 5, 6, 7]]) # missing background rank and performance (coaching performance)
+                        any([default[i] for i in [0, 2, 3, 9]]) # missing background school, role, or level (coaching enviroment)
+                        or all([default[i] for i in [5, 6, 7]]) # missing background rank and performance (coaching performance)
                         or t >= self.backgroundYears - self.predictionYears and (
-                            any(default[i] for i in [1, 11]) # missing foresight school or level (coaching enviroment)
+                            any(default[i] for i in [1, 10]) # missing foresight school or level (coaching enviroment)
                         )
                     ):
                         XSample[t] = [0 for y in range(len(XSample[t]))]
