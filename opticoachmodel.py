@@ -1,15 +1,13 @@
 from copy import deepcopy
-import keras.src.backend as K
 from keras import Model, utils
 from keras.src.callbacks import ReduceLROnPlateau, EarlyStopping
-from keras.src.layers import Input, Embedding, Concatenate, Masking, RepeatVector, LSTM, Dense, TimeDistributed, Lambda, BatchNormalization
+from keras.src.layers import Input, Embedding, Concatenate, Masking, RepeatVector, LSTM, Dense, TimeDistributed
 from keras._tf_keras.keras.models import load_model
 from keras.src.optimizers import Adam
 from keras_tuner import BayesianOptimization, HyperParameters
 import tensorflow as tf
-from numpy import array as nparr, isnan, isinf, nan, newaxis, shape, unique
+from numpy import newaxis, shape
 from preprocess import Preprocessor
-from Expander import Expander
 from utilities import save_pkl, load_pkl
 
 class OpticoachModel:

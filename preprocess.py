@@ -613,7 +613,7 @@ class Preprocessor:
         maxDifference = difference_coach_year.max().max()
         print(f"{maxDifference} ({type(maxDifference)})")
         normalizedDifference_coach_year = difference_coach_year.map(lambda diff : diff / maxDifference)
-        success_coach_year = ((0.5 * winRate_coach_year + 0.5 * normalizedDifference_coach_year) * sos_coach_year / (1 + 0.125 * talent_coach_year)).map(lambda x : x + 1)
+        success_coach_year = (0.5 * winRate_coach_year + 0.5 * normalizedDifference_coach_year) * sos_coach_year / (1 + 0.125 * talent_coach_year)
         success_coach_year = add_metric(
             success_coach_year,
             float,

@@ -94,6 +94,9 @@ class Postprocessor:
             plt.xlabel("True Values")
             plt.ylabel("Predicted Values")
             plt.title("True vs Predicted Values")
-            plt.savefig(f'trueVpred_{i}.png')
+            if i==0:
+                plt.savefig(f'trueVSpred_winRate.png')
+            elif i==1:
+                plt.savefig(f'trueVSpred_success.png')
         
         return
